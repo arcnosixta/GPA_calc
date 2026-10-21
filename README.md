@@ -236,7 +236,7 @@ function simulateGpa(completed: Subject[], planned: Subject[]): number | null;
 
 ### Участник №2 — UI/UX / Frontend
 
-**Имя:** `________________`
+**Имя:** `Kuat Akylbek`
 
 
 ### Участник №3 — Domain / GPA Logic / Tests
@@ -248,7 +248,7 @@ function simulateGpa(completed: Subject[], planned: Subject[]): number | null;
 
 ### Участник №4 — Data / Forms / QA
 
-**Имя:** `Nurdaulet Koishyman`
+**Имя:** `________________`
 
 
 
