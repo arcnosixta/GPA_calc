@@ -248,7 +248,7 @@ function simulateGpa(completed: Subject[], planned: Subject[]): number | null;
 
 ### Участник №4 — Data / Forms / QA
 
-**Имя:** `________________`
+**Имя:** `Nurdaulet Koishyman`
 
 
 
