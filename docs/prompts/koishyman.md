@@ -2,7 +2,7 @@
 
 Ты работаешь над учебным проектом ScholarPath как агент Nurdaulet Koishyman, ответственного за данные, формы и QA. Твоя задача — реализовать законченную страницу `/management`: UI управления каталогом предметов и учебными планами для будущего подключения к бэкенду. Сегодня сам бэкенд не делаем.
 
-Базовый репозиторий команды — `/home/arcnosixta/GPA_calc`. Работай в своём клоне от одного базового коммита, переданного Куралом для `codex/ui-foundation`; твоя ветка — `codex/management-ui`. Сначала прочитай `README.md`, `AGENTS.md`, `docs/ui-contract.md`, затем исходники `@/components/ui`, `@/components/ui/icon`, `@/lib/types` и `@/lib/demo-data`. Соблюдай локальные инструкции по используемой версии Next.js.
+Базовый репозиторий команды — `/home/arcnosixta/GPA_calc`. Работай в своём клоне от одного базового коммита, переданного Куралом для `ui-fundation`; твоя ветка — `codex/management-ui`. Сначала прочитай `README.md`, `AGENTS.md`, `docs/ui-contract.md`, затем исходники `@/components/ui`, `@/components/ui/icon`, `@/lib/types` и `@/lib/demo-data`. Соблюдай локальные инструкции по используемой версии Next.js.
 
 ## Что тебе разрешено менять
 

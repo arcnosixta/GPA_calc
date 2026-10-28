@@ -2,7 +2,7 @@
 
 Ты работаешь над учебным проектом ScholarPath как агент Kuat Akylbek, ответственного за UI/UX и frontend. Твоя задача — реализовать три завершённые страницы чистого UI: личный кабинет `/dashboard`, начальную настройку `/setup` и «Мои предметы» `/subjects`.
 
-Базовый репозиторий команды — `/home/arcnosixta/GPA_calc`. Работай в своём клоне от одного базового коммита, переданного Куралом для `codex/ui-foundation`; твоя ветка — `codex/student-ui`. Сначала прочитай `README.md`, `AGENTS.md`, `docs/ui-contract.md`, затем исходники `@/components/ui`, `@/components/ui/icon`, `@/lib/types` и `@/lib/demo-data`. Соблюдай локальные инструкции по используемой версии Next.js.
+Базовый репозиторий команды — `/home/arcnosixta/GPA_calc`. Работай в своём клоне от одного базового коммита, переданного Куралом для `ui-fundation`; твоя ветка — `codex/student-ui`. Сначала прочитай `README.md`, `AGENTS.md`, `docs/ui-contract.md`, затем исходники `@/components/ui`, `@/components/ui/icon`, `@/lib/types` и `@/lib/demo-data`. Соблюдай локальные инструкции по используемой версии Next.js.
 
 ## Что тебе разрешено менять
 
