@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { SectionPlaceholder } from "@/components/layout/section-placeholder";
+import { PageHeader } from "@/components/ui";
+import { PlanSetup } from "@/components/student/plan-setup";
 
 export const metadata: Metadata = { title: "Выбор учебного плана" };
 
-// Временная заглушка. Владелец страницы заменяет её своим интерфейсом.
 export default function Page() {
-  return <SectionPlaceholder title="Выбор учебного плана" description="Найди свою группу или выбери предметы из каталога." />;
+  return <div className="space-y-6">
+    <PageHeader eyebrow="Начальная настройка" title="Выбор учебного плана" description="Посмотрите готовый план своей группы или попробуйте собрать набор предметов из каталога." />
+    <PlanSetup />
+  </div>;
 }
