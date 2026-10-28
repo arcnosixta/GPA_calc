@@ -1,0 +1,176 @@
+{
+  "date": "2026-10-28",
+  "timezone": "Asia/Qyzylorda",
+  "platform": "Windows",
+  "browser": "Google Chrome 156.0.8078.49",
+  "mode": "headless production",
+  "checkedCommit": "a3efe768bf74e665bd508b887a7490c7d7609c1d",
+  "viewportHeight": 900,
+  "passed": 30,
+  "failed": 0,
+  "browserErrors": [],
+  "cases": [
+    {
+      "name": "dashboard 320x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "setup 320x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "subjects 320x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "management 320x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "dashboard 360x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "setup 360x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "subjects 360x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "management 360x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "dashboard 768x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "setup 768x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "subjects 768x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "management 768x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "dashboard 1024x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "setup 1024x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "subjects 1024x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "management 1024x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "dashboard 1440x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "setup 1440x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "subjects 1440x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "management 1440x900 direct/reload/layout",
+      "result": "PASS"
+    },
+    {
+      "name": "Demo data match across dashboard and subjects",
+      "result": "PASS"
+    },
+    {
+      "name": "Desktop menu routes and browser Back/Forward",
+      "result": "PASS"
+    },
+    {
+      "name": "Mobile menu button, Escape, Enter, focus, route closing, history",
+      "result": "PASS"
+    },
+    {
+      "name": "Setup group/semester/manual/empty/reset/refresh/subjects",
+      "result": "PASS"
+    },
+    {
+      "name": "Management filters search/group/semester/combined/empty/reset",
+      "result": "PASS"
+    },
+    {
+      "name": "Management table scroll keyboard within 320px page",
+      "result": "PASS"
+    },
+    {
+      "name": "Management form required/errors/ARIA/focus/credit boundaries",
+      "result": "PASS"
+    },
+    {
+      "name": "Management long title/code preview/update/reset/no catalog mutation/reload",
+      "result": "PASS"
+    },
+    {
+      "name": "No browser errors",
+      "result": "PASS"
+    },
+    {
+      "name": "Keyboard Tab/Shift+Tab and visible focus on all pages at 320 and 1440",
+      "result": "PASS"
+    }
+  ],
+  "tableDimensions": [
+    {
+      "width": 320,
+      "route": "management",
+      "table": {
+        "width": 244,
+        "scroll": 640
+      }
+    },
+    {
+      "width": 360,
+      "route": "management",
+      "table": {
+        "width": 284,
+        "scroll": 640
+      }
+    },
+    {
+      "width": 768,
+      "route": "management",
+      "table": {
+        "width": 652,
+        "scroll": 652
+      }
+    },
+    {
+      "width": 1024,
+      "route": "management",
+      "table": {
+        "width": 636,
+        "scroll": 640
+      }
+    },
+    {
+      "width": 1440,
+      "route": "management",
+      "table": {
+        "width": 1020,
+        "scroll": 1020
+      }
+    }
+  ]
+}
