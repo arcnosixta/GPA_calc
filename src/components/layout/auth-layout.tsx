@@ -12,15 +12,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </a>
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-8">
-          <Link href={siteRoutes.home.path} aria-label="ScholarPath — главная" className="inline-flex items-center gap-3 rounded-lg">
+          <Link href={siteRoutes.login.path} aria-label="ScholarPath — вход" className="inline-flex items-center gap-3 rounded-lg">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Icon name="cap" className="size-6" />
             </span>
             <span className="text-xl font-semibold tracking-tight">ScholarPath.</span>
           </Link>
           <nav aria-label="Навигация аккаунта" className="flex flex-wrap items-center gap-4 text-sm">
-            <Link href={siteRoutes.home.path} className="rounded hover:underline">На главную</Link>
-            <Link href={siteRoutes.dashboard.path} className="rounded font-semibold hover:underline">Демокабинет</Link>
+            <Link href={siteRoutes.login.path} className="rounded hover:underline">Вход</Link>
+            <Link href={siteRoutes.register.path} className="rounded font-semibold hover:underline">Регистрация</Link>
           </nav>
         </div>
       </header>
@@ -40,7 +40,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <main id="main-content" tabIndex={-1} className="min-w-0 outline-none">
           <div className="mb-6">
             <Badge variant="outline">Демонстрационный экран</Badge>
-            <p className="mt-3 text-xs leading-5 text-muted">Сейчас доступен просмотр интерфейса. Данные не отправляются.</p>
+            <p className="mt-3 text-xs leading-5 text-muted">Демосеанс работает в этой вкладке. Данные не отправляются.</p>
           </div>
           {children}
         </main>

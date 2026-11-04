@@ -1,36 +1,36 @@
 import Link from "next/link";
-import { navigationSections, siteRoutes } from "@/lib/site-routes";
-import { Icon } from "@/components/ui/icon";
+import type { DemoRole } from "@/lib/demo-session";
+import { canOpenWorkspaceRoute, catalogRoutes, siteRoutes } from "@/lib/site-routes";
 
-export function WorkspaceSections({ pathname, onNavigate }: {
-  pathname: string | null;
+const linkStyles = "flex min-h-11 items-center rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-surface-muted hover:text-foreground";
+
+export function WorkspaceSections({ role, pathname, onNavigate }: {
+  role: DemoRole;
+  pathname: string;
   onNavigate: () => void;
 }) {
+  const routes = catalogRoutes.filter((id) => canOpenWorkspaceRoute(siteRoutes[id].path, role));
+
   return (
-    <div className="mt-5 space-y-2 border-t border-border pt-4">
-      {navigationSections.map((section) => (
-        <details key={section.title} open={section.routes.some((id) => siteRoutes[id].path === pathname)}>
-          <summary className="min-h-11 rounded-lg px-3 py-3 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface-muted">
-            {section.title}
+    <div className="mt-4 space-y-1 border-t border-border pt-3">
+      {role !== "student" && (
+        <details key={pathname} open={routes.some((id) => siteRoutes[id].path === pathname)}>
+          <summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-sm font-semibold text-muted hover:bg-surface-muted">
+            Каталог и архив
           </summary>
-          <div className="space-y-1 pb-2">
-            {section.routes.map((id) => {
+          <div className="space-y-1 pb-2 pl-2">
+            {routes.map((id) => {
               const route = siteRoutes[id];
               const active = route.path === pathname;
-              return (
-                <Link key={id} href={route.path} aria-current={active ? "page" : undefined}
-                  onClick={onNavigate}
-                  className={"flex min-h-11 items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors " +
-                    (active ? "bg-primary font-medium text-primary-foreground" : "text-muted hover:bg-surface-muted hover:text-foreground")}>
-                  <span>{route.title}</span>
-                  {route.phase !== "mvp" && <span className={"shrink-0 text-xs " + (active ? "text-zinc-300" : "text-muted")}>Позже</span>}
-                  {active && <Icon name="chevron" className="size-3 shrink-0" />}
-                </Link>
-              );
+              return <Link key={id} href={route.path} aria-current={active ? "page" : undefined} onClick={onNavigate}
+                className={active ? "flex min-h-11 items-center rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground" : linkStyles}>
+                {route.title}
+              </Link>;
             })}
           </div>
         </details>
-      ))}
+      )}
+      <Link href={siteRoutes.logout.path} onClick={onNavigate} className={linkStyles}>Выйти</Link>
     </div>
   );
 }

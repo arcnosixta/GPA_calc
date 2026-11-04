@@ -7,10 +7,15 @@ export const demoStudent: Student = {
   semester: 3,
 };
 
+export const demoUniversities = [
+  { id: "central", name: "Центральный технический университет" },
+  { id: "digital", name: "Университет цифровых технологий" },
+];
+
 export const demoGroups: Group[] = [
-  { id: "is-24-1", name: "ИС-24-1", program: "Информационные системы", year: 2, subjectCount: 3 },
-  { id: "vt-24-1", name: "ВТ-24-1", program: "Вычислительная техника", year: 2, subjectCount: 2 },
-  { id: "se-25-1", name: "SE-25-1", program: "Программная инженерия", year: 1, subjectCount: 1 },
+  { id: "is-24-1", name: "ИС-24-1", program: "Информационные системы", universityId: "central", year: 2, subjectCount: 3 },
+  { id: "vt-24-1", name: "ВТ-24-1", program: "Вычислительная техника", universityId: "central", year: 2, subjectCount: 2 },
+  { id: "se-25-1", name: "SE-25-1", program: "Программная инженерия", universityId: "digital", year: 1, subjectCount: 1 },
 ];
 
 export const demoSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -40,3 +45,9 @@ export const demoSummary = {
   gradedSubjects: 2,
   totalSubjects: 3,
 };
+
+export function getDemoGroupPlan(groupId: string) {
+  const groupSubjects = demoSubjects.filter((subject) => subject.groupId === groupId);
+  const semester = groupSubjects.reduce((latest, subject) => Math.max(latest, subject.semester), 1);
+  return { semester, subjects: groupSubjects.filter((subject) => subject.semester === semester) };
+}

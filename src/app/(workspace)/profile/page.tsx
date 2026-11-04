@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { RouteScaffold } from "@/components/layout/route-scaffold";
+import { ProfileOverview } from "@/components/student/profile-overview";
 import { siteRoutes } from "@/lib/site-routes";
 
 export const metadata: Metadata = { title: siteRoutes.profile.title };
 
 export default function Page() {
-  return <RouteScaffold page="profile" />;
+  return <ProfileOverview />;
 }

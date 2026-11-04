@@ -1,4 +1,4 @@
-import { demoGroups, demoSemesters, demoStudent, demoStudyPlan, demoSummary } from "@/lib/demo-data";
+import { demoGroups, demoSemesters, demoStudent, demoStudyPlan, demoSummary, demoUniversities } from "@/lib/demo-data";
 import type { RouteId } from "@/lib/site-routes";
 
 type ScaffoldField = {
@@ -21,22 +21,26 @@ type ScaffoldContent = {
 const currentGroup = demoGroups.find((group) => group.id === demoStudent.groupId);
 
 export const scaffoldContent = {
-  profile: {
-    panelTitle: "Данные аккаунта",
-    paragraphs: ["Показан пример профиля студента. Изменение данных пока недоступно."],
-    fields: [
-      { label: "Имя", value: demoStudent.name },
-      { label: "Email", value: "student@example.com", type: "email" },
-    ],
-    rows: [{ label: "Учебная группа", detail: (currentGroup?.name ?? "Не выбрана") + " · " + demoStudent.semester + " семестр" }],
-    links: ["setup", "dashboard", "login", "logout"],
+  universities: {
+    panelTitle: "Каталог университетов",
+    paragraphs: ["Выберите университет, чтобы перейти к его учебным направлениям."],
+    rows: demoUniversities.map((university) => ({ label: university.name, detail: "Демонстрационная запись каталога" })),
+    action: "Добавить университет",
+    links: ["programs", "groups", "management"],
+  },
+  programs: {
+    panelTitle: "Учебные направления",
+    paragraphs: ["Каждое направление относится к университету и объединяет учебные группы."],
+    rows: demoGroups.map((group) => ({ label: group.program, detail: demoUniversities.find((university) => university.id === group.universityId)?.name ?? "Университет" })),
+    action: "Добавить направление",
+    links: ["universities", "groups", "studyPlans", "management"],
   },
   groups: {
     panelTitle: "Учебные группы",
     paragraphs: ["Три группы демонстрационного каталога. Здесь появятся создание групп и назначение модераторов."],
     rows: demoGroups.map((group) => ({ label: group.name, detail: group.program + " · " + group.year + " курс · Предметов: " + group.subjectCount })),
     action: "Создать группу",
-    links: ["studyPlans", "users", "semesters", "management"],
+    links: ["studyPlans", "semesters", "programs", "management"],
   },
   semesters: {
     panelTitle: "Семестры учебного плана",
@@ -65,10 +69,10 @@ export const scaffoldContent = {
     links: ["groups", "history", "management"],
   },
   history: {
-    panelTitle: "История административных изменений",
-    paragraphs: ["Здесь будут видны изменения каталога, учебных планов и назначений."],
-    empty: { title: "История пока пуста", description: "В демонстрационном макете административные действия не выполняются." },
-    links: ["users", "studyPlans", "management"],
+    panelTitle: "Результаты прошлых семестров",
+    paragraphs: ["В архиве будут доступны учебный год, семестр, предметы, полученные кредиты и GPA."],
+    empty: { title: "Архив пока пуст", description: "В этой версии можно посмотреть текущий учебный план. Записи прошлых семестров появятся в архиве." },
+    links: ["dashboard", "subjects", "profile"],
   },
   progress: {
     panelTitle: "Исходный результат",
@@ -131,38 +135,6 @@ export const scaffoldContent = {
     empty: { title: "Обращений пока нет", description: "Здесь будут обращения участников учебных чатов." },
     links: ["chats", "groups", "competitionManagement", "management"],
   },
-  competitions: {
-    panelTitle: "Учебные вызовы",
-    paragraphs: ["Предварительный пример добровольного соревнования. Участие ещё не открыто."],
-    rows: [
-      { label: "Учебный вызов", detail: "Баллы за проверяемые учебные задания" },
-      { label: "Период", detail: "Будет указан перед началом" },
-    ],
-    links: ["challenge", "leaderboard", "achievements"],
-  },
-  challenge: {
-    panelTitle: "Пример учебного задания",
-    paragraphs: ["Выполни учебное задание по объявленным условиям. Результат проверяется перед начислением баллов.", "Участие добровольное. Этот макет не подтверждает участие или выполнение задания."],
-    rows: [
-      { label: "Условие", detail: "Решить задание и представить результат на проверку" },
-      { label: "Период", detail: "Будет указан перед началом" },
-      { label: "Баллы", detail: "Правила начисления будут опубликованы вместе с заданием" },
-    ],
-    action: "Участвовать",
-    links: ["competitions", "leaderboard", "achievements"],
-  },
-  achievements: {
-    panelTitle: "Твои достижения",
-    paragraphs: ["Достижения будут выдаваться за подтверждённые учебные результаты."],
-    empty: { title: "Достижений пока нет", description: "В предварительном макете награды ещё не присваиваются." },
-    links: ["competitions", "challenge", "leaderboard"],
-  },
-  leaderboard: {
-    panelTitle: "Рейтинг учебных заданий",
-    paragraphs: ["Рейтинг строится по проверенным баллам за задания, с добровольным участием.", "Самостоятельно введённый GPA не используется как достоверная основа рейтинга. Личные оценки других студентов не показываются."],
-    empty: { title: "Рейтинг ещё не сформирован", description: "Участники и баллы появятся после запуска соревнования и проверки результатов." },
-    links: ["competitions", "challenge", "achievements"],
-  },
   competitionManagement: {
     panelTitle: "Настройка соревнования",
     paragraphs: ["Подготовлен макет условий соревнования. Публикация и проверка результатов пока недоступны."],
@@ -172,7 +144,7 @@ export const scaffoldContent = {
       { label: "Правило начисления", value: "Баллы за проверяемые учебные задания" },
     ],
     action: "Создать соревнование",
-    links: ["competitions", "challenge", "moderation", "management"],
+    links: ["gamification", "moderation", "management"],
   },
 } satisfies Record<string, ScaffoldContent>;
 

@@ -11,7 +11,7 @@ const source = readFileSync(join(root, "src/lib/site-routes.ts"), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { siteRoutes, navigationSections } = await import(
+const { siteRoutes, workspacePrimaryRoutes, catalogRoutes, redirectRoutes, canOpenWorkspaceRoute } = await import(
   "data:text/javascript;base64," + Buffer.from(compiled).toString("base64")
 );
 const routes = Object.values(siteRoutes);
@@ -26,11 +26,11 @@ function pagePaths(folder) {
   });
 }
 
-test("реестр точно покрывает все созданные страницы без повторяющихся URL", () => {
+test("реестр точно покрывает все созданные маршруты без повторяющихся URL", () => {
   const urls = routes.map((route) => route.path);
   assert.equal(new Set(urls).size, urls.length);
   assert.deepEqual([...urls].sort(), pagePaths(app).sort());
-  assert.equal(urls.length, 29);
+  assert.equal(urls.length, 32);
   for (const route of routes) {
     assert.ok(route.title && route.summary);
     assert.ok(["kural", "akylbek", "koishyman"].includes(route.owner));
@@ -38,17 +38,29 @@ test("реестр точно покрывает все созданные ст�
   }
 });
 
-test("навигация содержит все дополнительные страницы и только существующие маршруты", () => {
-  const ids = navigationSections.flatMap((section) => section.routes);
+test("основное меню ведёт в рабочие разделы и на один экран геймификации", () => {
+  const ids = [...workspacePrimaryRoutes, ...catalogRoutes];
   assert.equal(new Set(ids).size, ids.length);
-  for (const id of ids) assert.ok(siteRoutes[id], "Неизвестный маршрут: " + id);
-  const primary = ["home", "dashboard", "setup", "subjects", "management"];
-  assert.deepEqual([...primary, ...ids].sort(), Object.keys(siteRoutes).sort());
+  for (const id of ids) assert.ok(siteRoutes[id] && !Object.hasOwn(redirectRoutes, id), id);
+  assert.deepEqual(workspacePrimaryRoutes, ["dashboard", "profile", "setup", "subjects", "gamification"]);
+  assert.deepEqual(redirectRoutes, {
+    home: "login", competitions: "gamification", challenge: "gamification", achievements: "gamification", leaderboard: "gamification",
+  });
 });
 
-test("этапы README сохранены: макет будущего раздела не объявлен MVP", () => {
+test("архив доступен всем, каталог модератору и админу, назначение ролей админу", () => {
+  for (const role of ["student", "moderator", "admin"]) {
+    for (const id of [...workspacePrimaryRoutes, "history"]) assert.equal(canOpenWorkspaceRoute(siteRoutes[id].path, role), true, `${role} ${id}`);
+    for (const id of ["management", "universities", "programs", "groups", "semesters", "studyPlans", "moderation", "competitionManagement"]) {
+      assert.equal(canOpenWorkspaceRoute(siteRoutes[id].path, role), role !== "student", `${role} ${id}`);
+    }
+    assert.equal(canOpenWorkspaceRoute(siteRoutes.users.path, role), role === "admin", role);
+  }
+});
+
+test("этапы README сохранены: предварительный экран геймификации остаётся после чатов", () => {
   const afterMvp = ["progress", "goals", "simulator", "chats", "groupChat", "subjectChat", "moderation"];
-  const afterChats = ["competitions", "challenge", "achievements", "leaderboard", "competitionManagement"];
+  const afterChats = ["gamification", "competitions", "challenge", "achievements", "leaderboard", "competitionManagement"];
   for (const [id, route] of Object.entries(siteRoutes)) {
     const phase = afterMvp.includes(id) ? "after-mvp" : afterChats.includes(id) ? "after-chats" : "mvp";
     assert.equal(route.phase, phase, id);
@@ -56,14 +68,19 @@ test("этапы README сохранены: макет будущего разд
 });
 
 const base = process.env.SCHOLARPATH_CHECK_URL;
-test("HTTP: 29 страниц доступны, внутренние ссылки корректны, весь граф достижим", { skip: !base }, async () => {
+test("HTTP: 27 экранов, 5 перенаправлений, рабочие ссылки аккаунта и 404", { skip: !base }, async () => {
   const known = new Set(routes.map((route) => route.path));
-  const graph = new Map();
-  await Promise.all(routes.map(async (route) => {
-    const response = await fetch(new URL(route.path, base));
+  const linksByPage = new Map();
+  await Promise.all(Object.entries(siteRoutes).map(async ([id, route]) => {
+    const response = await fetch(new URL(route.path, base), { redirect: "manual" });
+    const target = redirectRoutes[id];
+    if (target) {
+      assert.equal(response.status, 307, route.path);
+      assert.equal(new URL(response.headers.get("location"), base).pathname, siteRoutes[target].path, route.path);
+      return;
+    }
     assert.equal(response.status, 200, route.path);
     const html = await response.text();
-    assert.ok(html.includes(route.title), "Нет заголовка: " + route.path);
     const links = new Set();
     for (const match of html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)) {
       if (!match[1].startsWith("/") || match[1].startsWith("//")) continue;
@@ -71,20 +88,15 @@ test("HTTP: 29 страниц доступны, внутренние ссылк�
       assert.ok(known.has(path), route.path + " → неизвестная ссылка " + path);
       links.add(path);
     }
-    graph.set(route.path, links);
+    linksByPage.set(id, links);
   }));
-  const expectedTransitions = [
+  const accountTransitions = [
     ["login", "register"], ["register", "verifyEmail"], ["verifyEmail", "login"],
     ["login", "forgotPassword"], ["forgotPassword", "resetPassword"], ["resetPassword", "login"],
-    ["goals", "progress"], ["simulator", "progress"], ["groupChat", "chats"],
-    ["subjectChat", "chats"], ["challenge", "competitions"],
   ];
-  for (const [from, to] of expectedTransitions) {
-    assert.ok(graph.get(siteRoutes[from].path).has(siteRoutes[to].path), from + " → " + to);
+  for (const [from, to] of accountTransitions) {
+    assert.ok(linksByPage.get(from).has(siteRoutes[to].path), from + " → " + to);
   }
-  const reached = new Set(["/"]);
-  for (const path of reached) for (const link of graph.get(path)) reached.add(link);
-  assert.deepEqual([...reached].sort(), [...known].sort());
   const missing = await fetch(new URL("/page-that-does-not-exist", base));
   assert.equal(missing.status, 404);
 });

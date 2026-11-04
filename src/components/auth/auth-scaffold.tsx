@@ -1,26 +1,12 @@
 import Link from "next/link";
 import { Badge, Button, Card, Field, Input, PageHeader, buttonStyles } from "@/components/ui";
 import { siteRoutes } from "@/lib/site-routes";
+import { DemoSessionForm, type DemoSessionPage } from "./demo-session-form";
 
-type AuthPage = "login" | "register" | "verifyEmail" | "forgotPassword" | "resetPassword" | "logout";
+type AuthPage = DemoSessionPage | "verifyEmail" | "forgotPassword" | "resetPassword";
 type AuthField = { id: string; label: string; type: "text" | "email" | "password"; placeholder: string };
 
 const forms: Partial<Record<AuthPage, { action: string; fields: AuthField[] }>> = {
-  login: {
-    action: "Войти",
-    fields: [
-      { id: "login-email", label: "Email", type: "email", placeholder: "student@example.edu" },
-      { id: "login-password", label: "Пароль", type: "password", placeholder: "Введите пароль" },
-    ],
-  },
-  register: {
-    action: "Создать аккаунт",
-    fields: [
-      { id: "register-name", label: "Имя", type: "text", placeholder: "Ваше имя" },
-      { id: "register-email", label: "Email", type: "email", placeholder: "student@example.edu" },
-      { id: "register-password", label: "Пароль", type: "password", placeholder: "Придумайте пароль" },
-    ],
-  },
   forgotPassword: {
     action: "Получить ссылку",
     fields: [{ id: "recovery-email", label: "Email аккаунта", type: "email", placeholder: "student@example.edu" }],
@@ -45,13 +31,12 @@ function AuthLinks({ page }: { page: AuthPage }) {
   if (page === "register") {
     return <div className="space-y-4">
       <Link href={siteRoutes.login.path} className={linkClass}>Уже есть аккаунт? Войти</Link>
-      <p><Link href={siteRoutes.verifyEmail.path} className={linkClass}>Посмотреть следующий экран</Link></p>
+      <p><Link href={siteRoutes.verifyEmail.path} className={linkClass}>Посмотреть экран подтверждения email</Link></p>
     </div>;
   }
   if (page === "verifyEmail") {
     return <div className="flex flex-wrap gap-4">
-      <Link href={siteRoutes.setup.path} className={buttonStyles()}>Посмотреть следующий экран</Link>
-      <Link href={siteRoutes.login.path} className={buttonStyles("secondary")}>Вернуться ко входу</Link>
+      <Link href={siteRoutes.login.path} className={buttonStyles()}>Вернуться ко входу</Link>
       <Link href={siteRoutes.register.path} className={buttonStyles("secondary")}>К регистрации</Link>
     </div>;
   }
@@ -68,19 +53,21 @@ function AuthLinks({ page }: { page: AuthPage }) {
     </div>;
   }
   return <div className="flex flex-wrap gap-4">
-    <Link href={siteRoutes.dashboard.path} className={buttonStyles()}>Вернуться в кабинет</Link>
-    <Link href={siteRoutes.login.path} className={buttonStyles("secondary")}>Перейти ко входу</Link>
+    <Link href={siteRoutes.dashboard.path} className={buttonStyles("secondary")}>Вернуться на главную</Link>
   </div>;
 }
 
 export function AuthScaffold({ page }: { page: AuthPage }) {
   const route = siteRoutes[page];
   const form = forms[page];
+  const isDemoSessionPage = page === "login" || page === "register" || page === "logout";
   return (
     <>
       <PageHeader eyebrow="Аккаунт ScholarPath" title={route.title} description={route.summary} />
       <Card className="space-y-6">
-        <Badge>Каркас страницы</Badge>
+        <Badge>{isDemoSessionPage ? "Демо-сеанс" : "Каркас страницы"}</Badge>
+
+        {isDemoSessionPage && <DemoSessionForm key={page} page={page} />}
 
         {form && (
           <div role="group" aria-label="Образец формы аккаунта" className="space-y-4">
@@ -98,23 +85,13 @@ export function AuthScaffold({ page }: { page: AuthPage }) {
           </div>
         )}
 
-        {page === "register" && (
-          <p className="text-sm leading-6 text-muted">В полной версии новый пользователь получит роль студента. Другие роли назначит администратор.</p>
-        )}
         {page === "verifyEmail" && (
           <div className="space-y-4 text-sm leading-6">
             <p>В полной версии здесь будет подтверждение адреса из регистрационной формы.</p>
             <p className="rounded-lg bg-surface-muted p-4"><span className="font-semibold">Пример адреса:</span> student@example.edu</p>
-            <p className="text-muted">В этом просмотре письмо не отправлялось. Переход ниже показывает экран выбора учебного плана и не подтверждает email.</p>
+            <p className="text-muted">Это пример экрана. Для демонстрационного входа подтверждение email не требуется.</p>
           </div>
         )}
-        {page === "logout" && (
-          <div className="space-y-4 text-sm leading-6">
-            <p>Этот экран показывает место выхода из аккаунта в общем пользовательском пути.</p>
-            <p className="text-muted">Сейчас открыт демонстрационный интерфейс без авторизованного сеанса. Переход ко входу не выполняет серверный выход.</p>
-          </div>
-        )}
-
         <div className="border-t border-border pt-6"><AuthLinks page={page} /></div>
       </Card>
     </>

@@ -15,6 +15,7 @@ export type Group = {
   id: string;
   name: string;
   program: string;
+  universityId: string;
   year: number;
   subjectCount: number;
 };

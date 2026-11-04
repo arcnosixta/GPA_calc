@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, Select, buttonStyles } from "@/components/ui";
-import { demoGroups, demoSemesters, demoStudent, demoSubjects } from "@/lib/demo-data";
+import { useDemoSession } from "@/lib/demo-session";
+import { demoGroups, demoSemesters, demoStudent, demoSubjects, getDemoGroupPlan } from "@/lib/demo-data";
 
 export function PlanSetup() {
   const [mode, setMode] = useState<"group" | "manual">("group");
-  const [groupId, setGroupId] = useState(demoStudent.groupId);
-  const [semester, setSemester] = useState(demoStudent.semester);
+  const initialGroupId = useDemoSession()?.profile?.groupId ?? demoStudent.groupId;
+  const [groupId, setGroupId] = useState(initialGroupId);
+  const [semester, setSemester] = useState(() => getDemoGroupPlan(initialGroupId).semester);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const group = demoGroups.find((item) => item.id === groupId);
   const availableSubjects = demoSubjects.filter((subject) => subject.semester === semester && (mode === "manual" || subject.groupId === groupId));
@@ -22,7 +24,7 @@ export function PlanSetup() {
   return <div className="space-y-6">
     <div className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6">
       <p className="font-semibold">Демонстрационный предпросмотр</p>
-      <p className="mt-1 text-muted">Выбор действует только на этой странице и не сохраняется. В «Моих предметах» всегда открыт исходный демоплан.</p>
+      <p className="mt-1 text-muted">Выбор действует только на этой странице и не сохраняется. В «Моих предметах» показан демоплан группы из твоего профиля.</p>
     </div>
     <fieldset>
       <legend className="mb-4 text-sm font-semibold">1. Как подобрать предметы?</legend>
@@ -40,7 +42,10 @@ export function PlanSetup() {
       <h2 className="mb-6 text-lg font-semibold">2. {mode === "group" ? "Группа и семестр" : "Каталог предметов"}</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         {mode === "group" && <Field label="Учебная группа" htmlFor="plan-group" hint={group ? `${group.program} · ${group.year} курс` : undefined}>
-          <Select id="plan-group" value={groupId} onChange={(event) => setGroupId(event.target.value)} aria-describedby={group ? "plan-group-hint" : undefined}>
+          <Select id="plan-group" value={groupId} onChange={(event) => {
+            setGroupId(event.target.value);
+            setSemester(getDemoGroupPlan(event.target.value).semester);
+          }} aria-describedby={group ? "plan-group-hint" : undefined}>
             {demoGroups.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.program}</option>)}
           </Select>
         </Field>}
@@ -80,10 +85,10 @@ export function PlanSetup() {
         </li>)}
       </ul> : <p className="mt-4 text-sm leading-6 text-muted">{mode === "manual" ? "Выберите предметы в каталоге, чтобы увидеть свой набор." : "Для выбранной группы и семестра пока нет предметов в демокаталоге."}</p>}
       <div className="mt-6 flex flex-wrap gap-4">
-        <Link href="/subjects" className={buttonStyles()}>Открыть исходный демоплан</Link>
+        <Link href="/subjects" className={buttonStyles()}>Открыть мои предметы</Link>
         {mode === "manual" && <Button variant="secondary" disabled={selectedIds.length === 0} onClick={() => setSelectedIds([])}>Сбросить выбор</Button>}
       </div>
-      <p className="mt-4 text-xs leading-5 text-muted">Переход откроет существующий демоплан из трёх предметов. Выбор из предпросмотра туда не переносится.</p>
+      <p className="mt-4 text-xs leading-5 text-muted">Выбор из предпросмотра не переносится в твой текущий план.</p>
     </Card>
   </div>;
 }
