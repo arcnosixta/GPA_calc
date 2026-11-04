@@ -3,19 +3,26 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, Select, buttonStyles } from "@/components/ui";
-import { useDemoSession } from "@/lib/demo-session";
-import { demoGroups, demoSemesters, demoStudent, demoSubjects, getDemoGroupPlan } from "@/lib/demo-data";
+import { demoSemesters, demoStudent } from "@/lib/demo-data";
+import { usePersonalPlan } from "./personal-plan";
+import { SessionState } from "./session-state";
 
 export function PlanSetup() {
+  const { session, catalog, subjects, replacePlan } = usePersonalPlan();
+  const { groups: demoGroups, subjects: demoSubjects } = catalog;
+  const getSemester = (id: string) => demoSubjects.filter((subject) => subject.groupId === id).reduce((latest, subject) => Math.max(latest, subject.semester), 1);
   const [mode, setMode] = useState<"group" | "manual">("group");
-  const initialGroupId = useDemoSession()?.profile?.groupId ?? demoStudent.groupId;
+  const initialGroupId = session?.profile?.groupId ?? demoStudent.groupId;
   const [groupId, setGroupId] = useState(initialGroupId);
-  const [semester, setSemester] = useState(() => getDemoGroupPlan(initialGroupId).semester);
+  const [semester, setSemester] = useState(() => getSemester(initialGroupId));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  if (!session?.profile) return <SessionState session={session} />;
   const group = demoGroups.find((item) => item.id === groupId);
   const availableSubjects = demoSubjects.filter((subject) => subject.semester === semester && (mode === "manual" || subject.groupId === groupId));
   const preview = mode === "group" ? availableSubjects : demoSubjects.filter((subject) => selectedIds.includes(subject.id));
   const credits = preview.reduce((total, subject) => total + subject.credits, 0);
+  const additions = preview.filter((subject) => !subjects.some((existing) => existing.id === subject.id && existing.semester === subject.semester));
 
   function toggleSubject(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -24,7 +31,7 @@ export function PlanSetup() {
   return <div className="space-y-6">
     <div className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6">
       <p className="font-semibold">Демонстрационный предпросмотр</p>
-      <p className="mt-1 text-muted">Выбор действует только на этой странице и не сохраняется. В «Моих предметах» показан демоплан группы из твоего профиля.</p>
+      <p className="mt-1 text-muted">Выберите предметы и добавьте их в локальный план. Оценки и кредиты уже добавленных предметов сохраняются. Изменения действуют до обновления вкладки или нового входа.</p>
     </div>
     <fieldset>
       <legend className="mb-4 text-sm font-semibold">1. Как подобрать предметы?</legend>
@@ -44,7 +51,7 @@ export function PlanSetup() {
         {mode === "group" && <Field label="Учебная группа" htmlFor="plan-group" hint={group ? `${group.program} · ${group.year} курс` : undefined}>
           <Select id="plan-group" value={groupId} onChange={(event) => {
             setGroupId(event.target.value);
-            setSemester(getDemoGroupPlan(event.target.value).semester);
+            setSemester(getSemester(event.target.value));
           }} aria-describedby={group ? "plan-group-hint" : undefined}>
             {demoGroups.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.program}</option>)}
           </Select>
@@ -85,10 +92,14 @@ export function PlanSetup() {
         </li>)}
       </ul> : <p className="mt-4 text-sm leading-6 text-muted">{mode === "manual" ? "Выберите предметы в каталоге, чтобы увидеть свой набор." : "Для выбранной группы и семестра пока нет предметов в демокаталоге."}</p>}
       <div className="mt-6 flex flex-wrap gap-4">
+        <Button disabled={additions.length === 0} onClick={() => {
+          replacePlan([...subjects, ...additions.map((subject) => ({ ...subject, grade: null }))]);
+          setMessage(`Добавлено в локальный план: ${additions.length}. Откройте «Мои предметы», чтобы поставить оценки.`);
+        }}>Добавить в локальный план</Button>
         <Link href="/subjects" className={buttonStyles()}>Открыть мои предметы</Link>
         {mode === "manual" && <Button variant="secondary" disabled={selectedIds.length === 0} onClick={() => setSelectedIds([])}>Сбросить выбор</Button>}
       </div>
-      <p className="mt-4 text-xs leading-5 text-muted">Выбор из предпросмотра не переносится в твой текущий план.</p>
+      <p role="status" className="mt-4 text-xs leading-5 text-muted">{message || "Повторы не добавляются. Новые предметы добавляются без оценки; профиль и группа не меняются."}</p>
     </Card>
   </div>;
 }
