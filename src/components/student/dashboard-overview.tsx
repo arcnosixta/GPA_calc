@@ -1,54 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { Badge, Card, PageHeader, buttonStyles } from "@/components/ui";
-import { Icon } from "@/components/ui/icon";
-import { demoGroups, demoStudent, demoSummary, getDemoGroupPlan, gradeOptions } from "@/lib/demo-data";
-import { useDemoSession } from "@/lib/demo-session";
-import { siteRoutes } from "@/lib/site-routes";
+import { useState } from "react";
+import { Badge, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
+import { gradePoints } from "./integration-adapter";
+import { GradeForecast } from "./grade-forecast";
+import { usePersonalPlan } from "./personal-plan";
+import { SessionState } from "./session-state";
+import { StudentSummary } from "./student-summary";
+import { StudyPlanList } from "./study-plan-list";
 
 export function DashboardOverview() {
-  const profile = useDemoSession()?.profile;
-  if (!profile) return null;
-
-  const group = demoGroups.find((item) => item.id === profile.groupId);
-  const { semester, subjects } = getDemoGroupPlan(profile.groupId);
-  const graded = subjects.filter((subject) => subject.grade !== null);
-  const lowestGrades = graded.map((subject) => ({ subject, rank: gradeOptions.findIndex((grade) => grade === subject.grade) }));
-  const weakest = lowestGrades.filter(({ rank }) => rank > gradeOptions.indexOf("B+"))
-    .sort((first, second) => second.rank - first.rank).slice(0, 2);
-  const currentGpa = group?.id === demoStudent.groupId ? demoSummary.semesterGpa : null;
-
-  return (
-    <div className="min-w-0 space-y-6">
-      <PageHeader eyebrow="Моё обучение" title="Главная" description={group ? `${group.name} · ${semester} семестр` : "Сводка успеваемости"}
-        action={<Link href={siteRoutes.profile.path} className={buttonStyles("secondary")}>Личный кабинет</Link>} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <h2 className="text-sm font-semibold">Текущий GPA</h2>
-          <p className="mt-4 text-4xl font-semibold tabular-nums">{currentGpa ?? "—"}{currentGpa && <span className="ml-2 text-sm font-normal text-muted">/ 4.00</span>}</p>
-          <p className="mt-2 text-sm leading-6 text-muted">{graded.length ? `${graded.length} из ${subjects.length} предметов с оценкой · демоданные` : "Появится после добавления оценок."}</p>
-        </Card>
-        <Card>
-          <h2 className="text-sm font-semibold">Прогноз GPA</h2>
-          <p className="mt-4 text-4xl font-semibold tabular-nums">—</p>
-          <p className="mt-2 text-sm leading-6 text-muted">Здесь появится результат по предполагаемым оценкам.</p>
-        </Card>
-      </div>
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Предметы, которым нужно внимание</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">До двух предметов с оценками ниже B+.</p>
-          </div>
-          <Link href={siteRoutes.subjects.path} className={buttonStyles("secondary")}>Мои предметы <Icon name="arrow" className="size-4" /></Link>
-        </div>
-        {weakest.length ? <ul className="mt-4 divide-y divide-border">
-          {weakest.map(({ subject }) => <li key={subject.id} className="flex items-center justify-between gap-3 py-3 last:pb-0">
-            <span className="min-w-0 break-words text-sm font-medium">{subject.title}</span><Badge variant="outline">{subject.grade}</Badge>
-          </li>)}
-        </ul> : <p className="mt-4 text-sm text-muted">{graded.length ? "Оценок ниже B+ нет." : "За этот семестр ещё нет оценок."}</p>}
-      </Card>
-    </div>
-  );
+  const { session, catalog, subjects } = usePersonalPlan();
+  const [selectedSemester, setSemester] = useState<number | null>(null);
+  if (!session?.profile) return <SessionState session={session} />;
+  const profile = session.profile;
+  const group = catalog.groups.find((item) => item.id === profile.groupId);
+  const university = catalog.universities.find((item) => item.id === profile.universityId);
+  const semesters = [...new Set(subjects.map((subject) => subject.semester))].sort((a, b) => a - b);
+  const semester = selectedSemester ?? semesters.at(-1) ?? 1;
+  const current = subjects.filter((subject) => subject.semester === semester);
+  const weakest = current.filter((subject) => subject.grade !== null && gradePoints[subject.grade] < gradePoints["B+"])
+    .sort((a, b) => gradePoints[a.grade!] - gradePoints[b.grade!]).slice(0, 2);
+  const ungraded = current.filter((subject) => subject.grade === null);
+  return <div className="min-w-0 space-y-6">
+    <PageHeader eyebrow="Моё обучение" title="Главная" description={`${profile.firstName} ${profile.lastName} · ${university?.name ?? "Вуз не найден"} · ${group?.name ?? "Группа не найдена"}`}
+      action={<Link href="/profile" className={buttonStyles("secondary")}>Личный кабинет</Link>} />
+    <p className="text-sm leading-6 text-muted">Демонстрационные данные. Текущие оценки меняются в «Моих предметах» и сбрасываются при обновлении вкладки или новом входе.</p>
+    <Field label="Семестр" htmlFor="dashboard-semester">
+      <Select id="dashboard-semester" value={semester} onChange={(event) => setSemester(Number(event.target.value))}>
+        {(semesters.length ? semesters : [1]).map((value) => <option key={value} value={value}>{value} семестр</option>)}
+      </Select>
+    </Field>
+    <StudentSummary subjects={subjects} semester={semester} />
+    <Card>
+      <h2 className="text-lg font-semibold">Предметы, которым нужно внимание</h2>
+      <p className="mt-2 text-sm text-muted">До двух оценок ниже B+, начиная с самой низкой.</p>
+      {weakest.length ? <ul className="mt-4 divide-y divide-border">{weakest.map((subject) => <li key={subject.id} className="flex items-center justify-between gap-3 py-3">
+        <span className="min-w-0 break-words text-sm font-medium">{subject.title}</span><Badge variant="outline">{subject.grade}</Badge>
+      </li>)}</ul> : <p className="mt-4 text-sm text-muted">{current.some((subject) => subject.grade !== null) ? "Оценок ниже B+ нет." : "Пока нет оценок для сравнения."}</p>}
+      <h3 className="mt-6 text-sm font-semibold">Без оценки</h3>
+      <p className="mt-2 break-words text-sm leading-6 text-muted">{ungraded.length ? ungraded.map((subject) => subject.title).join(", ") : "Все предметы этого семестра оценены."}</p>
+    </Card>
+    <GradeForecast key={profile.groupId} subjects={subjects} />
+    <Card>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4"><h2 className="text-lg font-semibold">Личный учебный план</h2><Link href="/subjects" className={buttonStyles("secondary")}>Мои предметы</Link></div>
+      {current.length ? <StudyPlanList subjects={current} /> : <p className="text-sm text-muted">Нет предметов в выбранном семестре.</p>}
+      <Link href="/setup" className={buttonStyles("ghost") + " mt-4"}>Подобрать предметы</Link>
+    </Card>
+  </div>;
 }

@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { Badge, Card, PageHeader, buttonStyles } from "@/components/ui";
-import { demoGroups, demoUniversities, getDemoGroupPlan } from "@/lib/demo-data";
 import { demoRoleLabels, useDemoSession } from "@/lib/demo-session";
 import { siteRoutes } from "@/lib/site-routes";
+import { useDemoCatalog } from "./integration-adapter";
+import { SessionState } from "./session-state";
 
 export function ProfileOverview() {
   const session = useDemoSession();
-  if (!session?.profile) return null;
+  const catalog = useDemoCatalog();
+  if (!session?.profile) return <SessionState session={session} />;
 
   const { firstName, lastName, universityId, groupId } = session.profile;
-  const university = demoUniversities.find((item) => item.id === universityId);
-  const group = demoGroups.find((item) => item.id === groupId);
-  const { semester } = getDemoGroupPlan(groupId);
+  const university = catalog.universities.find((item) => item.id === universityId);
+  const group = catalog.groups.find((item) => item.id === groupId);
+  const semester = catalog.subjects.filter((subject) => subject.groupId === groupId).reduce((latest, subject) => Math.max(latest, subject.semester), 1);
   const details = [
     { label: "Имя", value: firstName },
     { label: "Фамилия", value: lastName },

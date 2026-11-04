@@ -1,29 +1,22 @@
 import { Card } from "@/components/ui";
-import { demoStudent, demoSummary } from "@/lib/demo-data";
+import type { Subject } from "@/lib/types";
+import { calculateGpa } from "./integration-adapter";
 
-export function StudentSummary() {
-  return <section aria-label="Сводка демоплана" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    <Card>
-      <h2 className="text-sm text-muted">Общий GPA</h2>
-      <p className="mt-4 text-3xl font-semibold tabular-nums">{demoSummary.overallGpa}<span className="ml-2 text-sm font-normal text-muted">/ 4.00</span></p>
-      <p className="mt-3 text-xs text-muted">За весь период обучения</p>
-    </Card>
-    <Card>
-      <h2 className="text-sm text-muted">GPA семестра</h2>
-      <p className="mt-4 text-3xl font-semibold tabular-nums">{demoSummary.semesterGpa}<span className="ml-2 text-sm font-normal text-muted">/ 4.00</span></p>
-      <p className="mt-3 text-xs text-muted">{demoStudent.semester} семестр · демопример</p>
-    </Card>
-    <Card>
-      <h2 className="text-sm text-muted">Кредиты в плане</h2>
-      <p className="mt-4 text-3xl font-semibold tabular-nums">{demoSummary.plannedCredits}</p>
-      <p className="mt-3 text-xs text-muted">С оценкой: {demoSummary.gradedCredits} · зачтено: {demoSummary.earnedCredits}</p>
-    </Card>
-    <Card>
-      <h2 className="text-sm text-muted">Прогресс оценок</h2>
-      <p className="mt-4 text-3xl font-semibold tabular-nums">{demoSummary.gradedSubjects}<span className="ml-2 text-sm font-normal text-muted">из {demoSummary.totalSubjects}</span></p>
-      <p className="mt-3 text-xs text-muted">{demoSummary.gradedSubjects} из {demoSummary.totalSubjects} предметов с оценкой</p>
-      <progress value={demoSummary.gradedSubjects} max={demoSummary.totalSubjects} aria-label="Предметы с оценкой"
-        className="mt-3 h-1.5 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-surface-muted [&::-webkit-progress-value]:bg-primary" />
-    </Card>
+export function StudentSummary({ subjects, semester }: { subjects: readonly Subject[]; semester: number }) {
+  const selected = subjects.filter((subject) => subject.semester === semester);
+  const graded = selected.filter((subject) => subject.grade !== null);
+  const credits = (items: readonly Subject[]) => items.reduce((sum, subject) => sum + subject.credits, 0);
+  const stats = [
+    { title: "Общий GPA", value: calculateGpa(subjects)?.toFixed(2) ?? "—", hint: "За все семестры личного плана" },
+    { title: "GPA семестра", value: calculateGpa(selected)?.toFixed(2) ?? "—", hint: `${semester} семестр · по текущим оценкам` },
+    { title: "Кредиты в плане", value: credits(selected), hint: `С оценкой: ${credits(graded)} · зачтено: ${credits(graded.filter((subject) => subject.grade !== "F"))}` },
+    { title: "Прогресс оценок", value: `${graded.length} из ${selected.length}`, hint: "Предметов с оценкой в выбранном семестре" },
+  ];
+  return <section aria-label="Сводка личного плана" aria-live="polite" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {stats.map((stat) => <Card key={stat.title}>
+      <h2 className="text-sm text-muted">{stat.title}</h2>
+      <p className="mt-4 text-3xl font-semibold tabular-nums">{stat.value}</p>
+      <p className="mt-3 text-xs leading-5 text-muted">{stat.hint}</p>
+    </Card>)}
   </section>;
 }
