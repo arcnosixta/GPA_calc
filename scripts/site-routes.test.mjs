@@ -11,7 +11,7 @@ const source = readFileSync(join(root, "src/lib/site-routes.ts"), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { siteRoutes, workspacePrimaryRoutes, catalogRoutes, redirectRoutes, canOpenWorkspaceRoute } = await import(
+const { siteRoutes, workspacePrimaryRoutes, catalogRoutes, redirectRoutes, canOpenWorkspaceRoute, isSubjectDetailsPath, subjectDetailsPath } = await import(
   "data:text/javascript;base64," + Buffer.from(compiled).toString("base64")
 );
 const routes = Object.values(siteRoutes);
@@ -30,12 +30,21 @@ test("реестр точно покрывает все созданные ма�
   const urls = routes.map((route) => route.path);
   assert.equal(new Set(urls).size, urls.length);
   assert.deepEqual([...urls].sort(), pagePaths(app).sort());
-  assert.equal(urls.length, 32);
+  assert.equal(urls.length, 33);
   for (const route of routes) {
     assert.ok(route.title && route.summary);
     assert.ok(["kural", "akylbek", "koishyman"].includes(route.owner));
-    assert.match(route.path, /^\/(?:[a-z-]+(?:\/[a-z-]+)*)?$/);
+    if (route !== siteRoutes.subjectDetails) assert.match(route.path, /^\/(?:[a-z-]+(?:\/[a-z-]+)*)?$/);
   }
+});
+
+test("ссылка на предмет кодирует идентификатор одним сегментом URL", () => {
+  assert.equal(siteRoutes.subjectDetails.path, "/subjects/[subjectId]");
+  assert.equal(subjectDetailsPath("math"), "/subjects/math");
+  assert.equal(subjectDetailsPath("a/b"), "/subjects/a%2Fb");
+  assert.ok(isSubjectDetailsPath(subjectDetailsPath("a/b")));
+  assert.ok(!isSubjectDetailsPath(siteRoutes.subjects.path));
+  assert.ok(!isSubjectDetailsPath("/subjects/math/edit"));
 });
 
 test("основное меню ведёт в рабочие разделы и на один экран геймификации", () => {
@@ -51,6 +60,7 @@ test("основное меню ведёт в рабочие разделы и �
 test("архив доступен всем, каталог модератору и админу, назначение ролей админу", () => {
   for (const role of ["student", "moderator", "admin"]) {
     for (const id of [...workspacePrimaryRoutes, "history"]) assert.equal(canOpenWorkspaceRoute(siteRoutes[id].path, role), true, `${role} ${id}`);
+    assert.equal(canOpenWorkspaceRoute(subjectDetailsPath("math"), role), true, role);
     for (const id of ["management", "universities", "programs", "groups", "semesters", "studyPlans", "moderation", "competitionManagement"]) {
       assert.equal(canOpenWorkspaceRoute(siteRoutes[id].path, role), role !== "student", `${role} ${id}`);
     }
@@ -68,11 +78,12 @@ test("этапы README сохранены: предварительный эк�
 });
 
 const base = process.env.SCHOLARPATH_CHECK_URL;
-test("HTTP: 27 экранов, 5 перенаправлений, рабочие ссылки аккаунта и 404", { skip: !base }, async () => {
+test("HTTP: 28 экранов, 5 перенаправлений, рабочие ссылки аккаунта и 404", { skip: !base }, async () => {
   const known = new Set(routes.map((route) => route.path));
   const linksByPage = new Map();
   await Promise.all(Object.entries(siteRoutes).map(async ([id, route]) => {
-    const response = await fetch(new URL(route.path, base), { redirect: "manual" });
+    const routePath = id === "subjectDetails" ? subjectDetailsPath("math") : route.path;
+    const response = await fetch(new URL(routePath, base), { redirect: "manual" });
     const target = redirectRoutes[id];
     if (target) {
       assert.equal(response.status, 307, route.path);
@@ -85,7 +96,7 @@ test("HTTP: 27 экранов, 5 перенаправлений, рабочие 
     for (const match of html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)) {
       if (!match[1].startsWith("/") || match[1].startsWith("//")) continue;
       const path = new URL(match[1].replaceAll("&amp;", "&"), base).pathname;
-      assert.ok(known.has(path), route.path + " → неизвестная ссылка " + path);
+      assert.ok(known.has(path) || isSubjectDetailsPath(path), routePath + " → неизвестная ссылка " + path);
       links.add(path);
     }
     linksByPage.set(id, links);

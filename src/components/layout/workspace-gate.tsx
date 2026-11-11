@@ -31,7 +31,7 @@ export function WorkspaceGate({ children }: { children: ReactNode }) {
       {!session.profile ? (
         <>
           <PageHeader title="Учебное пространство" />
-          <OnboardingDialog />
+          <OnboardingDialog key={session.email} email={session.email} />
         </>
       ) : !allowed ? (
         <>

@@ -53,7 +53,7 @@ export function GroupsManager() {
       event.currentTarget.focus();
       return;
     }
-    setStatus(editingId ? "Группа изменена в этой вкладке." : "Группа добавлена в демокаталог этой вкладки.");
+    setStatus(editingId ? "Группа изменена." : "Группа добавлена в демокаталог.");
     clearForm();
   }
 
@@ -63,7 +63,7 @@ export function GroupsManager() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader title="Учебные группы" eyebrow="Учебные справочники"
-        description="Группы связаны с направлением, вузом и предметами. Изменения относятся только к демокаталогу текущей вкладки."
+        description="Группы связаны с направлением, вузом и предметами. Изменения сохраняются в этом браузере."
         action={<Badge variant="outline">Демокаталог</Badge>} />
       <p className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6">
         {session.role === "admin"

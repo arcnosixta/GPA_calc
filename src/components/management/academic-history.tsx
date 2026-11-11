@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Select } from "@/components/ui";
-import { demoGroups, demoSemesters } from "@/lib/demo-data";
+import { useDemoCatalog } from "@/lib/demo-catalog";
+import { demoSemesters } from "@/lib/demo-data";
 import { useDemoSession } from "@/lib/demo-session";
 import { historyRecords } from "./history-data";
 
 export function AcademicHistory() {
   const session = useDemoSession();
+  const { groups } = useDemoCatalog();
   const [year, setYear] = useState("");
   const [semester, setSemester] = useState("");
   if (!session) return <p role="status">{session === undefined ? "Загружаем демосеанс…" : "Для просмотра архива войдите в демосеанс."}</p>;
 
-  const group = demoGroups.find((item) => item.id === session.profile?.groupId);
+  const group = groups.find((item) => item.id === session.profile?.groupId);
   const records = historyRecords.filter((record) => record.groupId === session.profile?.groupId);
   const years = [...new Set(records.map((record) => record.year))].sort();
   const visibleRecords = records.filter((record) => (!year || record.year === year)

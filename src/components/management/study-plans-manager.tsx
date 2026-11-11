@@ -18,7 +18,7 @@ export function StudyPlansManager() {
 
   return <div className="min-w-0 space-y-6">
     <PageHeader eyebrow="Группы и предметы" title="Учебные планы групп"
-      description="Выберите группу и семестр, затем составьте план из каталога. Изменения действуют только в текущей вкладке." />
+      description="Выберите группу и семестр, затем составьте план из каталога. Изменения сохраняются в этом браузере." />
     <p className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6 text-muted">
       Администратор работает со всеми группами, модератор — с назначенными. Кредиты здесь берутся из каталога для новых учебных записей.
       Уже полученные оценки и зафиксированные кредиты личного плана и архива не меняются.
@@ -58,7 +58,7 @@ function PlanEditor({ groupId, semester, session }: { groupId: string; semester:
     event.preventDefault();
     const result = saveStudyPlan(session, { groupId, semester, subjectIds: selectedIds });
     setError(result.ok ? "" : result.error ?? "Не удалось изменить учебный план.");
-    setMessage(result.ok ? "Учебный план изменён локально в этой вкладке." : "");
+    setMessage(result.ok ? "Учебный план изменён." : "");
     if (!result.ok) event.currentTarget.querySelector<HTMLElement>("fieldset")?.focus();
   }
 

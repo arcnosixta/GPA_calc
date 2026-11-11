@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
+import { subjectDetailsPath } from "@/lib/site-routes";
+import { AcademicCalendar } from "./academic-calendar";
 import { gradePoints } from "./integration-adapter";
 import { GradeForecast } from "./grade-forecast";
 import { usePersonalPlan } from "./personal-plan";
@@ -11,7 +13,7 @@ import { StudentSummary } from "./student-summary";
 import { StudyPlanList } from "./study-plan-list";
 
 export function DashboardOverview() {
-  const { session, catalog, subjects } = usePersonalPlan();
+  const { session, catalog, subjects, calendarId, setAcademicCalendar } = usePersonalPlan();
   const [selectedSemester, setSemester] = useState<number | null>(null);
   if (!session?.profile) return <SessionState session={session} />;
   const profile = session.profile;
@@ -26,23 +28,24 @@ export function DashboardOverview() {
   return <div className="min-w-0 space-y-6">
     <PageHeader eyebrow="Моё обучение" title="Главная" description={`${profile.firstName} ${profile.lastName} · ${university?.name ?? "Вуз не найден"} · ${group?.name ?? "Группа не найдена"}`}
       action={<Link href="/profile" className={buttonStyles("secondary")}>Личный кабинет</Link>} />
-    <p className="text-sm leading-6 text-muted">Демонстрационные данные. Текущие оценки меняются в «Моих предметах» и сбрасываются при обновлении вкладки или новом входе.</p>
+    <p className="text-sm leading-6 text-muted">Оценки из «Моих предметов» и прогноз GPA сохраняются в этом браузере.</p>
     <Field label="Семестр" htmlFor="dashboard-semester">
       <Select id="dashboard-semester" value={semester} onChange={(event) => setSemester(Number(event.target.value))}>
         {(semesters.length ? semesters : [1]).map((value) => <option key={value} value={value}>{value} семестр</option>)}
       </Select>
     </Field>
     <StudentSummary subjects={subjects} semester={semester} />
+    <AcademicCalendar semester={semester} calendarId={calendarId} onCalendarChange={setAcademicCalendar} />
     <Card>
       <h2 className="text-lg font-semibold">Предметы, которым нужно внимание</h2>
       <p className="mt-2 text-sm text-muted">До двух оценок ниже B+, начиная с самой низкой.</p>
       {weakest.length ? <ul className="mt-4 divide-y divide-border">{weakest.map((subject) => <li key={subject.id} className="flex items-center justify-between gap-3 py-3">
-        <span className="min-w-0 break-words text-sm font-medium">{subject.title}</span><Badge variant="outline">{subject.grade}</Badge>
+        <Link href={subjectDetailsPath(subject.id)} className="min-w-0 break-words text-sm font-medium underline underline-offset-4">{subject.title}</Link><Badge variant="outline">{subject.grade}</Badge>
       </li>)}</ul> : <p className="mt-4 text-sm text-muted">{current.some((subject) => subject.grade !== null) ? "Оценок ниже B+ нет." : "Пока нет оценок для сравнения."}</p>}
       <h3 className="mt-6 text-sm font-semibold">Без оценки</h3>
       <p className="mt-2 break-words text-sm leading-6 text-muted">{ungraded.length ? ungraded.map((subject) => subject.title).join(", ") : "Все предметы этого семестра оценены."}</p>
     </Card>
-    <GradeForecast key={profile.groupId} subjects={subjects} />
+    <GradeForecast />
     <Card>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4"><h2 className="text-lg font-semibold">Личный учебный план</h2><Link href="/subjects" className={buttonStyles("secondary")}>Мои предметы</Link></div>
       {current.length ? <StudyPlanList subjects={current} /> : <p className="text-sm text-muted">Нет предметов в выбранном семестре.</p>}

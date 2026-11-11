@@ -45,7 +45,7 @@ export function UniversitiesManager() {
       focusName();
       return;
     }
-    setStatus(editingId ? "Название вуза изменено в этой вкладке." : "Вуз добавлен в демокаталог этой вкладки.");
+    setStatus(editingId ? "Название вуза изменено." : "Вуз добавлен в демокаталог.");
     clearForm();
   }
 
@@ -55,7 +55,7 @@ export function UniversitiesManager() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader title="Университеты" eyebrow="Учебные справочники"
-        description="Локальный справочник вузов. Изменения доступны в текущей вкладке и не отправляются на сервер."
+        description="Локальный справочник вузов. Изменения сохраняются в этом браузере."
         action={<Badge variant="outline">Демокаталог</Badge>} />
       {session.role === "moderator" && <p className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6">
         Показаны вузы назначенных групп и созданные в демообласти модератора. Новый вуз также закрепляется за этой областью.

@@ -4,17 +4,18 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button, Field, Input, Select, buttonStyles } from "@/components/ui";
-import { demoGroups, demoUniversities } from "@/lib/demo-data";
+import { useDemoCatalog } from "@/lib/demo-catalog";
 import { saveDemoProfile } from "@/lib/demo-session";
 import { siteRoutes } from "@/lib/site-routes";
 
-export function OnboardingDialog() {
+export function OnboardingDialog({ email }: { email: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const [universityId, setUniversityId] = useState("");
   const [groupId, setGroupId] = useState("");
-  const groups = demoGroups.filter((group) => group.universityId === universityId);
+  const catalog = useDemoCatalog();
+  const groups = catalog.groups.filter((group) => group.universityId === universityId);
 
   useEffect(() => {
     const element = dialog.current;
@@ -29,7 +30,7 @@ export function OnboardingDialog() {
     const givenName = String(fields.get("firstName") ?? "").trim();
     const familyName = String(fields.get("lastName") ?? "").trim();
     if (!givenName || !familyName || !groups.some((group) => group.id === groupId)) return;
-    saveDemoProfile({ firstName: givenName, lastName: familyName, universityId, groupId });
+    if (!saveDemoProfile(email, { firstName: givenName, lastName: familyName, universityId, groupId })) return;
     if (pathname !== siteRoutes.dashboard.path) router.replace(siteRoutes.dashboard.path);
   }
 
@@ -56,7 +57,7 @@ export function OnboardingDialog() {
             setGroupId("");
           }}>
             <option value="" disabled>Выбрать университет</option>
-            {demoUniversities.map((university) => <option key={university.id} value={university.id}>{university.name}</option>)}
+            {catalog.universities.map((university) => <option key={university.id} value={university.id}>{university.name}</option>)}
           </Select>
         </Field>
         <Field label="Группа" htmlFor="onboarding-group">

@@ -90,7 +90,7 @@ export function SubjectForm({ subject: editing, onSaved }: { subject: Subject | 
     <Card>
       <h2 id="subject-form-title" className="text-lg font-semibold">{editing ? "Редактирование предмета" : "Новый предмет"}</h2>
       <p className="mt-2 text-sm leading-6 text-muted">
-        Сначала можно проверить предпросмотр, затем применить данные к каталогу этой вкладки. Обязательные поля отмечены *.
+        Проверьте предпросмотр, затем примените изменения в каталоге. Обязательные поля отмечены *.
       </p>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import { createBrowserStore } from "./browser-store";
 
 export type DemoRole = "student" | "moderator" | "admin";
 export type DemoProfile = {
@@ -9,7 +10,9 @@ export type DemoProfile = {
   universityId: string;
   groupId: string;
 };
-export type DemoSession = { role: DemoRole; profile: DemoProfile | null };
+type DemoAccount = { email: string; role: DemoRole };
+export type DemoSession = DemoAccount & { profile: DemoProfile | null };
+type DemoState = { active: DemoAccount | null; profiles: Record<string, DemoProfile> };
 
 export const demoRoleLabels: Record<DemoRole, string> = {
   student: "Студент",
@@ -17,70 +20,72 @@ export const demoRoleLabels: Record<DemoRole, string> = {
   admin: "Администратор",
 };
 
-const storageKey = "scholarpath.demo-session.v1";
-const listeners = new Set<() => void>();
-let cachedRaw: string | null = null;
-let cachedSession: DemoSession | null = null;
-let useMemoryOnly = false;
+export const defaultDemoEmail = "student@example.com";
+const storageKey = "scholarpath.demo-session.v2";
+const store = createBrowserStore<DemoState>(storageKey, { active: null, profiles: {} }, parseState, {
+  legacy: { key: "scholarpath.demo-session.v1", parse: parseLegacySession },
+});
 
-function parseSession(raw: string | null): DemoSession | null {
-  if (!raw) return null;
+function isRole(value: unknown): value is DemoRole {
+  return typeof value === "string" && Object.hasOwn(demoRoleLabels, value);
+}
+
+function isProfile(value: unknown): value is DemoProfile {
+  if (!value || typeof value !== "object") return false;
+  const { firstName, lastName, universityId, groupId } = value as Partial<DemoProfile>;
+  return [firstName, lastName, universityId, groupId].every((field) => typeof field === "string" && field.trim());
+}
+
+function parseState(raw: string): DemoState | null {
   try {
-    const session = JSON.parse(raw) as Partial<DemoSession> | null;
-    if (!session || typeof session.role !== "string" || !Object.hasOwn(demoRoleLabels, session.role)) return null;
-    const profile = session.profile;
-    if (profile !== null && (!profile || ![profile.firstName, profile.lastName, profile.universityId, profile.groupId]
-      .every((value) => typeof value === "string" && value.trim()))) return null;
-    return session as DemoSession;
+    const saved = JSON.parse(raw) as Partial<DemoState> | null;
+    if (!saved?.profiles || typeof saved.profiles !== "object" || Array.isArray(saved.profiles)) return null;
+    const profiles = Object.fromEntries(Object.entries(saved.profiles).filter(([, profile]) => isProfile(profile)));
+    const active = saved.active;
+    return { profiles, active: active && isRole(active.role) && typeof active.email === "string" && active.email ? active : null };
   } catch {
     return null;
   }
 }
 
-function getSession() {
-  if (useMemoryOnly) return cachedSession;
+function parseLegacySession(raw: string): DemoState | null {
   try {
-    const raw = window.sessionStorage.getItem(storageKey);
-    if (raw !== cachedRaw) {
-      cachedRaw = raw;
-      cachedSession = parseSession(raw);
-    }
+    const legacy = JSON.parse(raw) as Partial<DemoSession> | null;
+    if (!legacy || !isRole(legacy.role)) return null;
+    return {
+      active: { email: defaultDemoEmail, role: legacy.role },
+      profiles: isProfile(legacy.profile) ? { [defaultDemoEmail]: legacy.profile } : {},
+    };
   } catch {
-    useMemoryOnly = true;
+    return null;
   }
-  return cachedSession;
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => { listeners.delete(listener); };
-}
-
-function setSession(session: DemoSession | null) {
-  cachedSession = session;
-  cachedRaw = session ? JSON.stringify(session) : null;
-  try {
-    if (cachedRaw === null) window.sessionStorage.removeItem(storageKey);
-    else window.sessionStorage.setItem(storageKey, cachedRaw);
-  } catch {
-    useMemoryOnly = true;
-  }
-  listeners.forEach((listener) => listener());
 }
 
 export function useDemoSession() {
-  return useSyncExternalStore(subscribe, getSession, () => undefined);
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, () => undefined);
+  return useMemo<DemoSession | null | undefined>(() => {
+    if (!state) return undefined;
+    const { active, profiles } = state;
+    if (!active) return null;
+    const profile = Object.hasOwn(profiles, active.email) ? profiles[active.email] : null;
+    return { ...active, profile };
+  }, [state]);
 }
 
-export function startDemoSession(role: DemoRole) {
-  setSession({ role, profile: null });
+export function startDemoSession(role: DemoRole, email = defaultDemoEmail) {
+  store.update((state) => ({ ...state, active: { role, email: email.trim().toLowerCase() || defaultDemoEmail } }));
 }
 
 export function endDemoSession() {
-  setSession(null);
+  store.update((state) => ({ ...state, active: null }));
 }
 
-export function saveDemoProfile(profile: DemoProfile) {
-  const session = getSession();
-  if (session) setSession({ ...session, profile });
+export function saveDemoProfile(email: string, profile: DemoProfile) {
+  let saved = false;
+  store.update((state) => {
+    if (state.active?.email !== email) return state;
+    saved = true;
+    return { ...state, profiles: { ...state.profiles, [email]: profile } };
+  });
+  return saved;
 }

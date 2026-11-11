@@ -29,7 +29,7 @@ export function ManagementCatalog() {
     const result = archiveCatalogSubject(session, subject.id);
     if (!result.ok) { setMessage(result.error ?? "Не удалось архивировать предмет."); return; }
     if (editing?.id === subject.id) clearEditor();
-    setMessage(`«${subject.title}» перенесён в архив каталога этой вкладки. Старые планы, оценки и зафиксированные кредиты сохранены.`);
+    setMessage(`«${subject.title}» перенесён в архив каталога. Старые планы, оценки и зафиксированные кредиты сохранены.`);
     document.getElementById("catalog-search")?.focus();
   }
 
@@ -37,7 +37,7 @@ export function ManagementCatalog() {
     <div className="min-w-0 space-y-6">
       <div className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6">
         <p className="font-semibold">Локальный демокаталог</p>
-        <p className="mt-2 text-muted">Изменения остаются в текущей вкладке при переходах, обновлении и смене демороли. На сервер данные не отправляются.</p>
+        <p className="mt-2 text-muted">Изменения каталога сохраняются в этом браузере между визитами и доступны при смене демороли.</p>
         {session.role === "moderator" && <p className="mt-2 text-muted">Демообласть модератора — назначенные группы записи «{demoModeratorName}». Назначения меняет администратор в разделе пользователей.</p>}
       </div>
       <p role="status" className="text-sm leading-6">{message}</p>
@@ -52,7 +52,7 @@ export function ManagementCatalog() {
         <div className="space-y-4">
           {editing && <Button variant="secondary" onClick={clearEditor}>Отменить редактирование</Button>}
           <SubjectForm key={formVersion} subject={editing} onSaved={() => {
-            setMessage(editing ? "Изменения предмета применены в каталоге этой вкладки. Старые оценки и кредиты личного плана не изменены." : "Предмет добавлен в каталог и план группы в этой вкладке.");
+            setMessage(editing ? "Изменения предмета применены в каталоге. Старые оценки и кредиты личного плана сохранены." : "Предмет добавлен в каталог и план группы.");
             clearEditor();
             document.getElementById("catalog-search")?.focus();
           }} />

@@ -40,7 +40,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <main id="main-content" tabIndex={-1} className="min-w-0 outline-none">
           <div className="mb-6">
             <Badge variant="outline">Демонстрационный экран</Badge>
-            <p className="mt-3 text-xs leading-5 text-muted">Демосеанс работает в этой вкладке. Данные не отправляются.</p>
+            <p className="mt-3 text-xs leading-5 text-muted">Демопрофиль и учебные данные сохраняются в этом браузере.</p>
           </div>
           {children}
         </main>

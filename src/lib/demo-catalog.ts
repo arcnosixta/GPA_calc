@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { createBrowserStore } from "./browser-store";
 import { demoGroups, demoSemesters, demoSubjects, demoUniversities } from "./demo-data";
 import type { DemoSession } from "./demo-session";
 import type { Group, Subject } from "./types";
@@ -50,55 +51,48 @@ const initialCatalog: DemoCatalog = {
   moderatorUniversityIds: [],
 };
 
-// Отдельный ключ: выход из демосессии не очищает каталог текущей вкладки.
+// Каталог общий для деморолей в одном браузере.
 const storageKey = "scholarpath.demo-catalog.v1";
-const listeners = new Set<() => void>();
-let catalog = initialCatalog;
-let restored = false;
 
-function getCatalog() {
-  if (!restored && typeof window !== "undefined") {
-    restored = true;
-    try {
-      const raw = window.sessionStorage.getItem(storageKey);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        // Повреждённый или устаревший снимок заменяется исходным примером.
-        if (saved.version === 1 && saved.data && Object.keys(initialCatalog).every((key) => Array.isArray(saved.data[key]))) {
-          const data = saved.data as DemoCatalog;
-          if (data.groups.every((item) => typeof item.id === "string" && typeof item.programId === "string") &&
-              data.subjects.every((item) => typeof item.id === "string" && Number.isInteger(item.credits) && item.credits >= 1 && item.credits <= 30) &&
-              data.users.every((item) => Array.isArray(item.groupIds)) &&
-              data.studyPlans.every((item) => Array.isArray(item.subjectIds))) catalog = data;
-        }
-      }
-    } catch { /* Если sessionStorage недоступен, работает память вкладки. */ }
-  }
-  return catalog;
+function parseCatalog(raw: string): DemoCatalog | null {
+  try {
+    const saved = JSON.parse(raw);
+    if (saved.version !== 1 || !saved.data || !Object.keys(initialCatalog).every((key) => Array.isArray(saved.data[key]))) {
+      return null;
+    }
+    const data = saved.data as DemoCatalog;
+    if (data.groups.every((item) => typeof item.id === "string" && typeof item.programId === "string") &&
+        data.subjects.every((item) => typeof item.id === "string" && Number.isInteger(item.credits) && item.credits >= 1 && item.credits <= 30) &&
+        data.users.every((item) => Array.isArray(item.groupIds)) &&
+        data.studyPlans.every((item) => Array.isArray(item.subjectIds))) return data;
+  } catch { /* Повреждённый снимок заменяется исходным примером. */ }
+  return null;
 }
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => { listeners.delete(listener); };
-}
+const {
+  getSnapshot: getCatalog,
+  getServerSnapshot,
+  subscribe,
+  update: updateCatalogStore,
+} = createBrowserStore(storageKey, initialCatalog, parseCatalog, {
+  legacy: { key: storageKey },
+  serialize: (data) => JSON.stringify({ version: 1, data }),
+});
 
 export function useDemoCatalog() {
-  return useSyncExternalStore(subscribe, getCatalog, () => initialCatalog);
+  return useSyncExternalStore(subscribe, getCatalog, getServerSnapshot);
 }
 
 function updateCatalog(next: DemoCatalog): CatalogResult {
   const activeIds = new Set(next.subjects.map((subject) => subject.id));
-  catalog = {
+  updateCatalogStore(() => ({
     ...next,
     groups: next.groups.map((group) => ({
       ...group,
       subjectCount: new Set(next.studyPlans.filter((plan) => plan.groupId === group.id)
         .flatMap((plan) => plan.subjectIds.filter((id) => activeIds.has(id)))).size,
     })),
-  };
-  try { window.sessionStorage.setItem(storageKey, JSON.stringify({ version: 1, data: catalog })); }
-  catch { /* Изменения остаются в памяти, даже если браузер запретил хранилище. */ }
-  listeners.forEach((listener) => listener());
+  }));
   return { ok: true };
 }
 

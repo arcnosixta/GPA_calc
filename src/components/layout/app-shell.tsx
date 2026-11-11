@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { demoGroups } from "@/lib/demo-data";
+import { useDemoCatalog } from "@/lib/demo-catalog";
 import { demoRoleLabels, type DemoSession } from "@/lib/demo-session";
-import { siteRoutes, workspacePrimaryRoutes, type RouteId } from "@/lib/site-routes";
+import { isSubjectDetailsPath, siteRoutes, workspacePrimaryRoutes, type RouteId } from "@/lib/site-routes";
 import { WorkspaceSections } from "./workspace-sections";
 
 const navigationIcons: Partial<Record<RouteId, IconName>> = {
@@ -16,22 +16,25 @@ const navigationIcons: Partial<Record<RouteId, IconName>> = {
 
 export function AppShell({ children, session }: { children: ReactNode; session: DemoSession }) {
   const pathname = usePathname();
+  const { groups } = useDemoCatalog();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
-  const current = Object.values(siteRoutes).find((item) => item.path === pathname);
+  const subjectDetailsOpen = isSubjectDetailsPath(pathname);
+  const current = subjectDetailsOpen ? siteRoutes.subjectDetails : Object.values(siteRoutes).find((item) => item.path === pathname);
   const { profile, role } = session;
-  const group = demoGroups.find((item) => item.id === profile?.groupId);
+  const group = groups.find((item) => item.id === profile?.groupId);
   const name = profile ? `${profile.firstName} ${profile.lastName}` : "Настройка профиля";
   const initials = profile ? (Array.from(profile.firstName)[0] + Array.from(profile.lastName)[0]).toUpperCase() : "SP";
   const navigation: RouteId[] = [...workspacePrimaryRoutes, role === "student" ? "history" : "management"];
 
   const links = navigation.map((id) => {
     const route = siteRoutes[id];
-    const active = pathname === route.path;
-    return <Link key={id} href={route.path} aria-current={active ? "page" : undefined}
+    const currentPage = pathname === route.path;
+    const activeSection = id === "subjects" && subjectDetailsOpen;
+    return <Link key={id} href={route.path} aria-current={currentPage ? "page" : activeSection ? "location" : undefined}
       onClick={() => setMenuOpen(false)}
       className={"flex min-h-11 items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors " +
-        (active ? "bg-primary text-primary-foreground" : "text-muted hover:bg-surface-muted hover:text-foreground")}>
+        (currentPage || activeSection ? "bg-primary text-primary-foreground" : "text-muted hover:bg-surface-muted hover:text-foreground")}>
       <Icon name={navigationIcons[id] ?? "grid"} className="shrink-0" />
       {id === "history" ? "Управление · архив" : route.title}
     </Link>;

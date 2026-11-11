@@ -17,6 +17,7 @@ export const siteRoutes = {
   dashboard: { path: "/dashboard", title: "Главная", summary: "Текущий GPA, прогноз и предметы, которым нужно внимание.", phase: "mvp", owner: "akylbek", section: "study" },
   setup: { path: "/setup", title: "Выбор учебного плана", summary: "Группа или самостоятельный выбор предметов.", phase: "mvp", owner: "akylbek", section: "study" },
   subjects: { path: "/subjects", title: "Мои предметы", summary: "Семестры, кредиты и собственные оценки.", phase: "mvp", owner: "akylbek", section: "study" },
+  subjectDetails: { path: "/subjects/[subjectId]", title: "Предмет", summary: "Оценка, кредиты и вклад предмета в GPA.", phase: "mvp", owner: "akylbek", section: "study" },
   management: { path: "/management", title: "Управление", summary: "Просмотр каталога и форма предмета.", phase: "mvp", owner: "koishyman", section: "management" },
   login: { path: "/login", title: "Вход", summary: "Вход в учебное пространство.", phase: "mvp", owner: "akylbek", section: "account" },
   register: { path: "/register", title: "Регистрация", summary: "Создание студенческого аккаунта.", phase: "mvp", owner: "akylbek", section: "account" },
@@ -48,6 +49,15 @@ export const siteRoutes = {
 } as const satisfies Record<string, SiteRoute>;
 
 export type RouteId = keyof typeof siteRoutes;
+
+export function subjectDetailsPath(subjectId: string) {
+  return siteRoutes.subjectDetails.path.replace("[subjectId]", encodeURIComponent(subjectId));
+}
+
+export function isSubjectDetailsPath(path: string) {
+  const prefix = `${siteRoutes.subjects.path}/`;
+  return path.startsWith(prefix) && /^[^/]+$/.test(path.slice(prefix.length));
+}
 
 export const phaseLabels: Record<RoutePhase, string> = {
   mvp: "MVP",

@@ -1,4 +1,4 @@
-import type { Grade, Group, Student, Subject } from "./types";
+import type { Group, Student, Subject } from "./types";
 
 export const demoStudent: Student = {
   name: "Нурдаулет Курал",
@@ -19,10 +19,6 @@ export const demoGroups: Group[] = [
 ];
 
 export const demoSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
-
-export const gradeOptions: Grade[] = [
-  "A", "A−", "B+", "B", "B−", "C+", "C", "C−", "D+", "D", "F",
-];
 
 export const demoSubjects: Subject[] = [
   { id: "math", code: "MAT 201", title: "Математика", credits: 3, semester: 3, groupId: "is-24-1", grade: "A" },

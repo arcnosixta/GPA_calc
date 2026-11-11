@@ -56,7 +56,7 @@ export function ProgramsManager() {
       event.currentTarget.focus();
       return;
     }
-    setStatus((editingId ? "Направление изменено" : "Направление добавлено") + " в этой вкладке. " +
+    setStatus((editingId ? "Направление изменено." : "Направление добавлено.") + " " +
       (filter && filter !== universityId ? "Оно скрыто текущим фильтром по вузу." : ""));
     clearForm();
   }
@@ -67,7 +67,7 @@ export function ProgramsManager() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader title="Направления" eyebrow="Учебные справочники"
-        description="Каждое направление связано с вузом. Локальные изменения доступны в текущей вкладке, без отправки на сервер."
+        description="Каждое направление связано с вузом. Изменения сохраняются в этом браузере."
         action={<Badge variant="outline">Демокаталог</Badge>} />
       <nav aria-label="Связанные учебные справочники" className="flex flex-wrap gap-4">
         <Link href="/management/universities" className={buttonStyles("secondary")}>Университеты</Link>

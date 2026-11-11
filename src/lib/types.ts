@@ -1,5 +1,5 @@
 export type Grade =
-  | "A" | "A−" | "B+" | "B" | "B−" | "C+" | "C" | "C−" | "D+" | "D" | "F";
+  | "A" | "A−" | "B+" | "B" | "B−" | "C+" | "C" | "C−" | "D+" | "D" | "FX" | "F";
 
 export type Subject = {
   id: string;

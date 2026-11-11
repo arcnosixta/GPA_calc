@@ -1,14 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { Button, Field, Input, Select } from "@/components/ui";
-import { demoRoleLabels, endDemoSession, startDemoSession, type DemoRole } from "@/lib/demo-session";
+import { defaultDemoEmail, demoRoleLabels, endDemoSession, startDemoSession, type DemoRole } from "@/lib/demo-session";
 import { siteRoutes } from "@/lib/site-routes";
 
 export type DemoSessionPage = "login" | "register" | "logout";
 
 const roles = ["student", "moderator", "admin"] as const satisfies readonly DemoRole[];
+const subscribeToHydration = () => () => {};
 
 const actions = {
   login: "Войти",
@@ -25,6 +26,7 @@ const descriptions = {
 export function DemoSessionForm({ page }: { page: DemoSessionPage }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,9 +36,11 @@ export function DemoSessionForm({ page }: { page: DemoSessionPage }) {
       if (page === "logout") {
         endDemoSession();
       } else {
-        const selectedRole = page === "login" ? new FormData(event.currentTarget).get("role") : null;
+        const fields = new FormData(event.currentTarget);
+        const selectedRole = page === "login" ? fields.get("role") : null;
         const role = roles.find((option) => option === selectedRole) ?? "student";
-        startDemoSession(role);
+        const email = event.currentTarget.querySelector<HTMLInputElement>("#demo-email")?.value;
+        startDemoSession(role, email ?? defaultDemoEmail);
       }
     } catch {
       setError("Не удалось изменить демо-сеанс. Проверьте доступ к хранилищу браузера и повторите попытку.");
@@ -52,10 +56,10 @@ export function DemoSessionForm({ page }: { page: DemoSessionPage }) {
       {page !== "logout" && (
         <>
           <p id="demo-credentials-hint" className="text-xs leading-5 text-muted">
-            В полях уже стоят вымышленные данные. Их можно оставить для быстрого входа.
+            Можно оставить вымышленные данные для быстрого входа. Для возврата в свой демопрофиль укажите тот же email.
           </p>
           <Field htmlFor="demo-email" label="Email">
-            <Input id="demo-email" type="email" defaultValue="student@example.com" required
+            <Input id="demo-email" type="email" defaultValue={defaultDemoEmail} required
               aria-describedby="demo-credentials-hint" />
           </Field>
           <Field htmlFor="demo-password" label="Пароль" hint="Минимум 8 символов.">
@@ -71,7 +75,7 @@ export function DemoSessionForm({ page }: { page: DemoSessionPage }) {
           </Select>
         </Field>
       )}
-      <Button type="submit" className="w-full">{actions[page]}</Button>
+      <Button type="submit" disabled={!hydrated} className="w-full">{actions[page]}</Button>
       {error && <p role="alert" className="text-sm font-medium">{error}</p>}
     </form>
   );
