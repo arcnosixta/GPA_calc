@@ -37,7 +37,7 @@ export function DashboardOverview() {
       </Select>
     </Field>
     <StudentSummary subjects={subjects} semester={semester} />
-    <GpaHistoryChart history={gpaHistory} selectedSemester={semester} />
+    <GpaHistoryChart history={gpaHistory} selectedSemester={semester} onSelectSemester={setSemester} />
     <AcademicCalendar semester={semester} calendarId={calendarId} onCalendarChange={setAcademicCalendar} />
     <Card>
       <h2 className="text-lg font-semibold">Предметы, которым нужно внимание</h2>
