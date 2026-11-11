@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Badge, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
 import { subjectDetailsPath } from "@/lib/site-routes";
 import { AcademicCalendar } from "./academic-calendar";
-import { gradePoints } from "./integration-adapter";
+import { GpaHistoryChart } from "./gpa-history-chart";
+import { calculateGpaHistory, gradePoints } from "./integration-adapter";
 import { GradeForecast } from "./grade-forecast";
 import { usePersonalPlan } from "./personal-plan";
 import { SessionState } from "./session-state";
@@ -19,7 +20,8 @@ export function DashboardOverview() {
   const profile = session.profile;
   const group = catalog.groups.find((item) => item.id === profile.groupId);
   const university = catalog.universities.find((item) => item.id === profile.universityId);
-  const semesters = [...new Set(subjects.map((subject) => subject.semester))].sort((a, b) => a - b);
+  const gpaHistory = calculateGpaHistory(subjects);
+  const semesters = gpaHistory.map(({ semester }) => semester);
   const semester = selectedSemester ?? semesters.at(-1) ?? 1;
   const current = subjects.filter((subject) => subject.semester === semester);
   const weakest = current.filter((subject) => subject.grade !== null && gradePoints[subject.grade] < gradePoints["B+"])
@@ -35,6 +37,7 @@ export function DashboardOverview() {
       </Select>
     </Field>
     <StudentSummary subjects={subjects} semester={semester} />
+    <GpaHistoryChart history={gpaHistory} selectedSemester={semester} />
     <AcademicCalendar semester={semester} calendarId={calendarId} onCalendarChange={setAcademicCalendar} />
     <Card>
       <h2 className="text-lg font-semibold">Предметы, которым нужно внимание</h2>

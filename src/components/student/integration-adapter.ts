@@ -1,4 +1,4 @@
-import type { Grade } from "@/lib/types";
+import type { Grade, Subject } from "@/lib/types";
 
 export const gradeScaleSource = "https://www.gov.kz/org/control/documents/details/39111?lang=ru";
 
@@ -43,4 +43,19 @@ export function calculateGpa(subjects: readonly { credits: number; grade: Grade 
     points += subject.credits * gradePoints[subject.grade];
   }
   return credits ? points / credits : null;
+}
+
+export type GpaHistoryPoint = {
+  semester: number;
+  semesterGpa: number | null;
+  cumulativeGpa: number | null;
+};
+
+export function calculateGpaHistory(subjects: readonly Pick<Subject, "semester" | "credits" | "grade">[]): GpaHistoryPoint[] {
+  const semesters = [...new Set(subjects.map(({ semester }) => semester))].sort((a, b) => a - b);
+  return semesters.map((semester) => ({
+    semester,
+    semesterGpa: calculateGpa(subjects.filter((subject) => subject.semester === semester)),
+    cumulativeGpa: calculateGpa(subjects.filter((subject) => subject.semester <= semester)),
+  }));
 }
