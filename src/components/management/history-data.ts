@@ -1,4 +1,5 @@
 import type { Grade } from "@/lib/types";
+import { gradePoints } from "../student/integration-adapter";
 
 type HistoryRecord = {
   id: string;
@@ -26,3 +27,33 @@ export const historyRecords: readonly HistoryRecord[] = [
   { id: "vt-4", groupId: "vt-24-1", year: "2025–2026", semester: 3, code: "SYS 201", title: "Операционные системы", credits: 3, grade: null },
   { id: "se-1", groupId: "se-25-1", year: "2025–2026", semester: 1, code: "SE 101", title: "Введение в разработку", credits: 5, grade: null },
 ];
+
+export type HistorySort = "credits-asc" | "credits-desc" | "grade-asc" | "grade-desc";
+
+export type HistoryQuery = {
+  year?: string;
+  semester?: number;
+  credits?: number;
+  grade?: Grade | null;
+  sort?: HistorySort;
+};
+
+export function selectHistoryRecords(records: readonly HistoryRecord[], query: HistoryQuery) {
+  const visible = records.filter((record) =>
+    (query.year === undefined || record.year === query.year) &&
+    (query.semester === undefined || record.semester === query.semester) &&
+    (query.credits === undefined || record.credits === query.credits) &&
+    (query.grade === undefined || record.grade === query.grade),
+  );
+
+  if (!query.sort) return visible;
+
+  const direction = query.sort.endsWith("-asc") ? 1 : -1;
+  if (query.sort.startsWith("credits-")) {
+    return visible.sort((a, b) => (a.credits - b.credits) * direction);
+  }
+  return visible.sort((a, b) => {
+    if (a.grade === null || b.grade === null) return Number(a.grade === null) - Number(b.grade === null);
+    return (gradePoints[a.grade] - gradePoints[b.grade]) * direction;
+  });
+}
