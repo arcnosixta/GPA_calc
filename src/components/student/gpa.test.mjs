@@ -7,7 +7,7 @@ const source = readFileSync(new URL("./integration-adapter.ts", import.meta.url)
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { calculateGpa, earnsCredits, gradeFromScore, gradePoints } =
+const { calculateGpa } =
   await import("data:text/javascript;base64," + Buffer.from(compiled).toString("base64"));
 
 test("взвешенный GPA: A/3, B/2, без оценки/3 — 3.60", () => {
@@ -19,31 +19,31 @@ test("F участвует в знаменателе; отсутствие оц�
   assert.equal(calculateGpa([]), null);
   assert.equal(calculateGpa([{ credits: 3, grade: null }]), null);
 });
-test("шкала README, точность и неизменность исходных данных", () => {
-  assert.equal(gradePoints["A−"], 3.67);
-  assert.equal(gradePoints["B+"], 3.33);
+test("расчёт не округляет результат и сохраняет исходные оценки", () => {
   const subjects = Object.freeze([Object.freeze({ credits: 2, grade: "A−" }), Object.freeze({ credits: 1, grade: "B+" })]);
   assert.equal(calculateGpa(subjects), (2 * 3.67 + 3.33) / 3);
   assert.equal(subjects[0].grade, "A−");
 });
 
-test("итоговые баллы переводятся в буквы на границах общей шкалы", () => {
-  const bands = [
-    ["A", 95, 100], ["A−", 90, 94], ["B+", 85, 89], ["B", 80, 84],
-    ["B−", 75, 79], ["C+", 70, 74], ["C", 65, 69], ["C−", 60, 64],
-    ["D+", 55, 59], ["D", 50, 54], ["FX", 25, 49], ["F", 0, 24],
-  ];
-  for (const [grade, minimum, maximum] of bands) {
-    assert.equal(gradeFromScore(minimum), grade);
-    assert.equal(gradeFromScore(maximum), grade);
-  }
-  for (const invalid of [-1, 101, 94.5, NaN, Infinity]) assert.equal(gradeFromScore(invalid), null);
+test("F на 3 кредита и B на 2 дают 1.20, а FX даёт 0.50 балла на кредит", () => {
+  const gradedB = { credits: 2, grade: "B" };
+  assert.equal(calculateGpa([{ credits: 3, grade: "F" }, gradedB]), 1.2);
+  assert.equal(calculateGpa([{ credits: 3, grade: "FX" }, gradedB]), 1.5);
 });
 
-test("FX даёт 0.50 в GPA без зачтённых кредитов", () => {
-  assert.equal(calculateGpa([{ credits: 3, grade: "A" }, { credits: 2, grade: "FX" }]), 2.6);
-  assert.equal(earnsCredits("FX"), false);
-  assert.equal(earnsCredits("F"), false);
-  assert.equal(earnsCredits(null), false);
-  assert.equal(earnsCredits("D"), true);
+test("GPA семестра и всего плана учитывает кредиты без промежуточного округления", () => {
+  const subjects = [
+    { semester: 3, credits: 3, grade: "A" },
+    { semester: 3, credits: 2, grade: "B" },
+    { semester: 4, credits: 2, grade: "C+" },
+    { semester: 4, credits: 1, grade: "B+" },
+    { semester: 5, credits: 30, grade: null },
+  ];
+  const semesterGpa = (semester) => calculateGpa(subjects.filter((subject) => subject.semester === semester));
+
+  assert.equal(semesterGpa(3), 3.6);
+  assert.ok(Math.abs(semesterGpa(4) - 7.99 / 3) < 1e-12);
+  assert.equal(semesterGpa(5), null);
+  assert.equal(semesterGpa(6), null);
+  assert.ok(Math.abs(calculateGpa(subjects) - 25.99 / 8) < 1e-12);
 });

@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { createContext, Script } from "node:vm";
-import { webcrypto } from "node:crypto";
 import { test } from "node:test";
-import ts from "typescript";
+import { browser as createTestBrowser } from "./browser-test-runtime.mjs";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
 const catalogKey = "scholarpath.demo-catalog.v1";
 const progressKey = "scholarpath.student-progress.v1";
 const esilId = "esil-2026-2027-bachelor-2026";
@@ -16,42 +10,13 @@ const admin = { email: "admin@example.com", role: "admin", profile: null };
 const moderator = { ...admin, role: "moderator" };
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-// Изолированный браузер для каждого теста. Проверяется настоящий модуль хранилища.
-function browser(data = new Map()) {
-  const storage = (values) => ({
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-    removeItem: (key) => values.delete(key),
-  });
-  const context = createContext({
-    structuredClone, crypto: webcrypto,
-    window: { localStorage: storage(data), sessionStorage: storage(new Map()), addEventListener() {}, removeEventListener() {} },
-  });
-  const modules = new Map();
-  const react = {
-    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
-    useMemo: (create) => create(),
-    useEffect: (effect) => effect(),
+function browser(data) {
+  const runtime = createTestBrowser(data);
+  return {
+    ...runtime,
+    catalog: runtime.loadProject("src/lib/demo-catalog.ts"),
+    calendars: runtime.loadProject("src/lib/catalog-calendars.ts"),
   };
-  function load(path) {
-    if (modules.has(path)) return modules.get(path).exports;
-    const loadedModule = { exports: {} };
-    modules.set(path, loadedModule);
-    const code = ts.transpileModule(readFileSync(path, "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    }).outputText;
-    function require(specifier) {
-      if (specifier === "react") return react;
-      const base = specifier.startsWith("@/") ? resolve(root, "src", specifier.slice(2)) : resolve(dirname(path), specifier);
-      const target = [base + ".ts", base + ".tsx"].find(existsSync);
-      assert.ok(target, `Модуль не найден: ${specifier}`);
-      return load(target);
-    }
-    new Script(`(function(require,module,exports){${code}\n})`, { filename: path })
-      .runInContext(context)(require, loadedModule, loadedModule.exports);
-    return loadedModule.exports;
-  }
-  return { data, load, catalog: load(resolve(root, "src/lib/demo-catalog.ts")), calendars: load(resolve(root, "src/lib/catalog-calendars.ts")) };
 }
 
 function calendar(runtime, id = esilId) {
@@ -205,13 +170,13 @@ test("существующий личный план сохраняет оцен
     ["scholarpath.demo-session.v2", JSON.stringify({ active: { email, role: "student" }, profiles: { [email]: profile } })],
     [progressKey, progress],
   ]));
-  const personalPath = resolve(root, "src/components/student/personal-plan.ts");
-  assert.deepEqual(plain(runtime.load(personalPath).usePersonalPlan().subjects), subjects);
+  const personalPath = "src/components/student/personal-plan.ts";
+  assert.deepEqual(plain(runtime.loadProject(personalPath).usePersonalPlan().subjects), subjects);
   const math = runtime.catalog.useDemoCatalog().subjects.find((subject) => subject.id === "math");
   assert.equal(runtime.catalog.saveCatalogSubject(admin, { ...math, credits: 12 }, math.id).ok, true);
   assert.equal(runtime.catalog.updateAcademicCalendar(admin, esilId, edit(calendar(runtime))).ok, true);
   const reloaded = browser(runtime.data);
   assert.equal(reloaded.catalog.useDemoCatalog().subjects.find((subject) => subject.id === "math").credits, 12);
-  assert.deepEqual(plain(reloaded.load(personalPath).usePersonalPlan().subjects), subjects);
+  assert.deepEqual(plain(reloaded.loadProject(personalPath).usePersonalPlan().subjects), subjects);
   assert.equal(runtime.data.get(progressKey), progress, "Каталог не переписывает личные записи");
 });
