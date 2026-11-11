@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Badge, Button, Card, Field, Input, PageHeader, Select } from "@/components/ui";
 import { getManagedGroupIds, updateSemester, useDemoCatalog, type CatalogSemester } from "@/lib/demo-catalog";
 import { useDemoSession, type DemoSession } from "@/lib/demo-session";
+import { CalendarManager } from "./calendar-manager";
 
 export function SemestersManager() {
   const catalog = useDemoCatalog();
@@ -17,6 +18,7 @@ export function SemestersManager() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader eyebrow="Структура обучения" title="Семестры" description="Восемь семестров и их связи с учебными планами. Настройки сохраняются в этом браузере." />
+      <CalendarManager catalog={catalog} session={session} />
       <p className="rounded-xl border border-border bg-surface-muted p-4 text-sm leading-6 text-muted">
         Администратор меняет название и доступность семестра для новых планов. Модератор видит предметы и планы назначенных групп.
         Закрытие семестра не удаляет существующие планы и архив успеваемости.

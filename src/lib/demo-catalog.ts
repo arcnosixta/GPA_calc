@@ -2,6 +2,10 @@
 
 import { useSyncExternalStore } from "react";
 import { createBrowserStore } from "./browser-store";
+import {
+  academicSources, calendarUniversity, initialAcademicCalendars, isCatalogAcademicCalendar, validateCalendarTerms,
+  type AcademicSource, type CatalogAcademicCalendar, type CalendarTerm,
+} from "./catalog-calendars";
 import { demoGroups, demoSemesters, demoSubjects, demoUniversities } from "./demo-data";
 import type { DemoSession } from "./demo-session";
 import type { Group, Subject } from "./types";
@@ -25,13 +29,15 @@ export type DemoCatalog = {
   studyPlans: CatalogPlan[];
   users: CatalogUser[];
   moderatorUniversityIds: string[];
+  academicCalendars: CatalogAcademicCalendar[];
+  academicSources: AcademicSource[];
 };
 
 // Имена вымышленные. Демообласть роли «Модератор» принадлежит этой записи.
 export const demoModeratorId = "demo-moderator";
 export const demoModeratorName = "Дамир Соколов";
 const initialCatalog: DemoCatalog = {
-  universities: demoUniversities.map((item) => ({ ...item })),
+  universities: [...demoUniversities.map((item) => ({ ...item })), calendarUniversity],
   programs: demoGroups.map((group) => ({ id: "program-" + group.id, name: group.program, universityId: group.universityId })),
   groups: demoGroups.map((group) => ({ ...group, programId: "program-" + group.id })),
   // Личные оценки не входят в каталог. Их исходные значения остаются в demo-data.
@@ -49,6 +55,8 @@ const initialCatalog: DemoCatalog = {
     { id: "demo-admin", name: "Ирина Белова", role: "admin", groupIds: [] },
   ],
   moderatorUniversityIds: [],
+  academicCalendars: initialAcademicCalendars,
+  academicSources,
 };
 
 // Каталог общий для деморолей в одном браузере.
@@ -57,14 +65,28 @@ const storageKey = "scholarpath.demo-catalog.v1";
 function parseCatalog(raw: string): DemoCatalog | null {
   try {
     const saved = JSON.parse(raw);
-    if (saved.version !== 1 || !saved.data || !Object.keys(initialCatalog).every((key) => Array.isArray(saved.data[key]))) {
+    const oldKeys = Object.keys(initialCatalog).filter((key) => key !== "academicCalendars" && key !== "academicSources");
+    if (saved.version !== 1 || !saved.data || !oldKeys.every((key) => Array.isArray(saved.data[key]))) {
       return null;
     }
     const data = saved.data as DemoCatalog;
     if (data.groups.every((item) => typeof item.id === "string" && typeof item.programId === "string") &&
         data.subjects.every((item) => typeof item.id === "string" && Number.isInteger(item.credits) && item.credits >= 1 && item.credits <= 30) &&
         data.users.every((item) => Array.isArray(item.groupIds)) &&
-        data.studyPlans.every((item) => Array.isArray(item.subjectIds))) return data;
+        data.studyPlans.every((item) => Array.isArray(item.subjectIds))) {
+      // Дополняем старый каталог, не сбрасывая предметы, группы и настройки пользователя.
+      const universities = data.universities.some((item) => item.id === calendarUniversity.id)
+        ? data.universities : [...data.universities, calendarUniversity];
+      const calendars = Array.isArray(data.academicCalendars)
+        ? data.academicCalendars.filter(isCatalogAcademicCalendar) : [];
+      return {
+        ...data, universities, academicSources,
+        academicCalendars: initialAcademicCalendars.map((initial) => calendars.find((item) =>
+          item.id === initial.id && item.universityId === initial.universityId &&
+          item.academicYear === initial.academicYear && item.sourceId === initial.sourceId &&
+          item.terms.every((term) => initial.terms.some((original) => original.id === term.id && original.season === term.season))) ?? initial),
+      };
+    }
   } catch { /* Повреждённый снимок заменяется исходным примером. */ }
   return null;
 }
@@ -212,6 +234,30 @@ export function updateSemester(session: Session, number: number, input: { title:
   if (!state.semesters.some((item) => item.number === number)) return failure("Семестр не найден.");
   if (!validName(input.title, 60)) return failure("Название семестра: от 1 до 60 символов.");
   return updateCatalog({ ...state, semesters: state.semesters.map((item) => item.number === number ? { ...item, ...input, title: input.title.trim() } : item) });
+}
+
+export function updateAcademicCalendar(session: Session, id: string, input: { scope: string; terms: CalendarTerm[] }): CatalogResult {
+  const state = getCatalog();
+  const previous = state.academicCalendars.find((item) => item.id === id);
+  if (!previous || !getManagedUniversityIds(session, state).includes(previous.universityId)) {
+    return failure("Календарь находится вне вашей области управления.");
+  }
+  if (!validName(input.scope, 240)) return failure("Укажите область применения от 1 до 240 символов.");
+  const error = validateCalendarTerms(input.terms);
+  if (error) return failure(error);
+  const [firstYear, lastYear] = previous.academicYear.split("-");
+  const ranges = input.terms.flatMap((term) => [term.period, term.rk1, term.rk2]);
+  if (ranges.some((range) => range?.kind === "dates" &&
+      (range.start < `${firstYear}-01-01` || range.end > `${lastYear}-12-31`))) {
+    return failure(`Даты должны относиться к годам ${firstYear}–${lastYear}. Для другого учебного года нужна отдельная запись.`);
+  }
+  if (input.terms.some((term) => !previous.terms.some((item) => item.id === term.id && item.season === term.season))) {
+    return failure("Идентификаторы учебных периодов менять нельзя.");
+  }
+  const calendar: CatalogAcademicCalendar = {
+    ...previous, scope: input.scope.trim(), terms: structuredClone(input.terms), status: "local",
+  };
+  return updateCatalog({ ...state, academicCalendars: state.academicCalendars.map((item) => item.id === id ? calendar : item) });
 }
 
 export function saveStudyPlan(session: Session, input: { groupId: string; semester: number; subjectIds: string[] }): CatalogResult {
