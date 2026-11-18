@@ -125,9 +125,12 @@ export function ProgressOverview() {
                 </Select>
               </Field>
             </div>
-            <Button variant="secondary" onClick={resetFilters} disabled={!search && gradeFilter === "all"}>
-              Сбросить фильтры
-            </Button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p role="status" className="text-sm text-muted">Найдено {visibleSubjects.length} из {currentSubjects.length}</p>
+              <Button variant="secondary" onClick={resetFilters} disabled={!search && gradeFilter === "all"}>
+                Сбросить фильтры
+              </Button>
+            </div>
           </Card>
         )}
         {visibleSubjects.map((subject) => {
