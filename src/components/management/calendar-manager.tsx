@@ -10,6 +10,16 @@ const termNames = { autumn: "Осенний семестр", spring: "Весен
 const rangeNames = { period: "Период семестра", rk1: "РК1", rk2: "РК2" };
 const rangeKeys = ["period", "rk1", "rk2"] as const;
 
+function sameRange(first: CalendarRange, second: CalendarRange) {
+  if (first === null || second === null) return first === second;
+  return first.kind === second.kind && first.start === second.start && first.end === second.end;
+}
+
+function previewRange(range: CalendarRange) {
+  if (range?.kind === "dates" && (!range.start || !range.end)) return "Диапазон заполнен не полностью";
+  return formatCalendarRange(range);
+}
+
 export function CalendarManager({ catalog, session }: { catalog: DemoCatalog; session: DemoSession }) {
   const [chosenUniversity, setUniversity] = useState("");
   const [academicYear, setYear] = useState("2026-2027");
@@ -59,6 +69,7 @@ function CalendarDetails({ calendar, universityName, catalog, session }: {
 }) {
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
+  const [season, setSeason] = useState<"autumn" | "spring">("autumn");
   const source = catalog.academicSources.find((item) => item.id === calendar.sourceId);
   const status = calendar.status === "official" ? "Официальный календарь"
     : calendar.status === "demo" ? "Демонстрационный пример" : "Локальная редакция";
@@ -79,8 +90,15 @@ function CalendarDetails({ calendar, universityName, catalog, session }: {
     </div>
     {calendar.status === "local" && <p className="text-sm leading-6 text-muted">Это локальные правки пользователя. Они не подтверждены вузом; ссылка ниже ведёт на исходный документ, если он указан.</p>}
     {!source && <p className="text-sm leading-6 text-muted">Расписание демонстрационное, сроки служат ориентиром. Официальный источник для этой записи не указан.</p>}
-    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-      {calendar.terms.map((term) => <div key={term.id} className="min-w-0 rounded-xl border border-border p-4">
+    <div role="group" aria-label="Семестр календаря" className="flex flex-wrap gap-4">
+      {calendar.terms.map((term) => <Button key={term.id}
+        variant={season === term.season ? "primary" : "secondary"}
+        aria-pressed={season === term.season} onClick={() => setSeason(term.season)}>
+        {termNames[term.season]}
+      </Button>)}
+    </div>
+    <div className="min-w-0">
+      {calendar.terms.filter((term) => term.season === season).map((term) => <div key={term.id} className="min-w-0 rounded-xl border border-border p-4">
         <h4 className="mb-4 font-semibold">{termNames[term.season]}</h4>
         <dl className="space-y-4 text-sm">
           {rangeKeys.map((key) => <div key={key} className="space-y-1">
@@ -102,17 +120,33 @@ function CalendarDetails({ calendar, universityName, catalog, session }: {
       setMessage("");
       requestAnimationFrame(() => document.getElementById("calendar-scope")?.focus());
     }}>Изменить локально</Button>}
-    {editing && <CalendarEditor calendar={calendar} session={session} onClose={finish} />}
+    {editing && <CalendarEditor calendar={calendar} season={season} session={session} onClose={finish} />}
     <p role="status" className="text-sm leading-6 text-muted">{message}</p>
   </Card>;
 }
 
-function CalendarEditor({ calendar, session, onClose }: {
-  calendar: CatalogAcademicCalendar; session: DemoSession; onClose: (message: string) => void;
+function CalendarEditor({ calendar, season, session, onClose }: {
+  calendar: CatalogAcademicCalendar; season: "autumn" | "spring"; session: DemoSession; onClose: (message: string) => void;
 }) {
   const [scope, setScope] = useState(calendar.scope);
   const [terms, setTerms] = useState(calendar.terms);
   const [error, setError] = useState("");
+
+  // Сравниваем черновик обоих семестров с сохранённым календарём.
+  const changes: { id: string; label: string; before: string; after: string }[] = [];
+  for (const term of terms) {
+    const saved = calendar.terms.find((item) => item.id === term.id);
+    if (!saved) continue;
+    for (const key of rangeKeys) {
+      if (!sameRange(saved[key], term[key])) changes.push({
+        id: `${term.id}-${key}`, label: `${termNames[term.season]} · ${rangeNames[key]}`,
+        before: formatCalendarRange(saved[key]), after: previewRange(term[key]),
+      });
+    }
+  }
+  if (scope.trim() !== calendar.scope) changes.push({
+    id: "scope", label: "Область применения", before: calendar.scope, after: scope.trim() || "Не указана",
+  });
 
   function changeRange(termId: string, key: typeof rangeKeys[number], range: CalendarRange) {
     setError("");
@@ -121,6 +155,7 @@ function CalendarEditor({ calendar, session, onClose }: {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!changes.length) return;
     const validationError = validateCalendarTerms(terms);
     if (validationError) {
       setError(validationError);
@@ -137,21 +172,34 @@ function CalendarEditor({ calendar, session, onClose }: {
 
   return <form onSubmit={submit} className="space-y-6 border-t border-border pt-6">
     <h4 className="font-semibold">Локальное редактирование календаря</h4>
-    <p className="text-sm leading-6 text-muted">Оставьте диапазон целиком, если источник задаёт несколько дней или недель. Для отсутствующих данных выберите «Срок не указан».</p>
+    <p className="text-sm leading-6 text-muted">Можно изменить оба семестра перед сохранением. Оставьте диапазон целиком, если источник задаёт несколько дней или недель. Для отсутствующих данных выберите «Срок не указан».</p>
     <Field label="Область применения: программа или курс" htmlFor="calendar-scope">
       <Input id="calendar-scope" value={scope} required maxLength={240}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? "calendar-form-error" : undefined}
         onChange={(event) => { setScope(event.target.value); setError(""); }} />
     </Field>
-    {terms.map((term) => <fieldset key={term.id} className="min-w-0 space-y-4 rounded-xl border border-border p-4">
+    {terms.filter((term) => term.season === season).map((term) => <fieldset key={term.id} className="min-w-0 space-y-4 rounded-xl border border-border p-4">
       <legend className="px-2 font-semibold">{termNames[term.season]}</legend>
       {rangeKeys.map((key) => <RangeEditor key={key} id={`${term.season}-${key}`} label={rangeNames[key]} range={term[key]}
         error={error} onChange={(range) => changeRange(term.id, key, range)} />)}
     </fieldset>)}
+    <section aria-labelledby="calendar-changes-heading" className="space-y-4 rounded-xl border border-border bg-surface-muted p-4">
+      <h4 id="calendar-changes-heading" className="font-semibold">Изменения перед сохранением</h4>
+      <p className="text-sm text-muted">Предпросмотр обоих семестров. Эти правки ещё не сохранены.</p>
+      {changes.length ? <ul className="space-y-4">
+        {changes.map((change) => <li key={change.id} className="min-w-0 space-y-2">
+          <p className="text-sm font-semibold">{change.label}</p>
+          <dl className="grid min-w-0 gap-4 text-sm sm:grid-cols-2">
+            <div><dt className="text-muted">Было</dt><dd className="wrap-anywhere">{change.before}</dd></div>
+            <div><dt className="text-muted">Станет</dt><dd className="wrap-anywhere">{change.after}</dd></div>
+          </dl>
+        </li>)}
+      </ul> : <p className="text-sm text-muted">Нет изменений.</p>}
+    </section>
     {error && <p id="calendar-form-error" role="alert" tabIndex={-1} className="text-sm font-semibold">{error}</p>}
     <div className="flex flex-wrap gap-4">
-      <Button type="submit">Сохранить локально</Button>
+      <Button type="submit" disabled={!changes.length}>Сохранить локально</Button>
       <Button variant="secondary" onClick={() => onClose("")}>Отмена</Button>
     </div>
   </form>;
