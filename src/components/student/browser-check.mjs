@@ -68,14 +68,19 @@ async function visit(path, heading) {
   await call("Page.navigate", { url: base + path });
   await wait("location.pathname === " + JSON.stringify(path) + " && " + visibleHeading + " === " + JSON.stringify(heading));
 }
-const assessmentFields = ["rk1", "rk2", "exam", "finalScore"];
-const assessmentInput = (field) => "#assessment-math-" + field;
-const assessmentValues = () => evaluate(JSON.stringify(assessmentFields) + ".map(field => document.querySelector('#assessment-math-' + field)?.value)");
-async function saveAssessment(scores) {
-  for (const [field, value] of Object.entries(scores)) await fill(assessmentInput(field), value);
-  await click("document.querySelector('#assessment-math-rk1').form.querySelector('button[type=submit]')");
+const assessmentFields = ["rk1", "rk2", "exam"];
+const assessmentInput = (field, subject = "math") => `#assessment-${subject}-${field}`;
+const assessmentValues = (subject = "math") => {
+  const selectors = assessmentFields.map((field) => assessmentInput(field, subject));
+  return evaluate(JSON.stringify(selectors) + ".map(selector => document.querySelector(selector)?.value)");
+};
+const mathResult = "document.querySelector('output[aria-labelledby=assessment-math-result-label]')?.textContent";
+async function saveAssessment(scores, subject = "math") {
+  for (const [field, value] of Object.entries(scores)) await fill(assessmentInput(field, subject), value);
+  await click(`document.querySelector('${assessmentInput("rk1", subject)}').form.querySelector('button[type=submit]')`);
   await wait("document.body.innerText.includes('Баллы сохранены в этом браузере.')");
 }
+const allScores = (value) => ({ rk1: value, rk2: value, exam: value });
 async function assertDashboardGpa(expected) {
   const values = await evaluate(
     "[...document.querySelector('[aria-label=\"Сводка личного плана\"]').children]" +
@@ -115,13 +120,14 @@ try {
   await wait(profileVisible(firstProfile) + " && document.querySelector('h1')?.textContent === 'Личный кабинет'");
   assert.equal(await evaluate("!!document.querySelector('dialog[open]')"), false);
   await go("/subjects", "Мои предметы");
-  await select("#grade-math", "F");
-  assert.match(await text(), /1\.20/);
-  assert.match(await text(), /С оценкой: 5 · зачтено: 2/);
   await go("/subjects/math", "Математика");
+  await saveAssessment(allScores("0"));
   assert.match(await text(), /GPA по предмету/);
   await call("Page.reload");
-  await wait("document.querySelector('#detail-grade-math')?.value === 'F'");
+  await wait(mathResult + " === 'F · 0 из 100'");
+  await go("/subjects", "Мои предметы");
+  assert.match(await text(), /1\.20/);
+  assert.match(await text(), /С оценкой: 5 · зачтено: 2/);
   await go("/dashboard", "Главная");
   assert.match(await text(), /1\.20/);
   assert.match(await text(), /Выберите хотя бы одну/);
@@ -129,24 +135,43 @@ try {
   assert.match(await text(), /Прогноз общего GPA: 2\.25/);
   assert.match(await text(), /ENG 201: A/);
   await go("/subjects", "Мои предметы");
-  assert.equal(await evaluate("document.querySelector('#grade-english').value"), "");
-  assert.equal(await evaluate("document.querySelector('#grade-math').value"), "F");
-  await select("#grade-math", "");
-  await select("#grade-programming", "");
+  await go("/subjects/english", "Английский язык");
+  assert.deepEqual(await assessmentValues("english"), ["", "", ""]);
+  assert.match(await text(), /GPA по предмету\s+—/);
+  await go("/subjects", "Мои предметы");
+  await go("/subjects/math", "Математика");
+  await wait(mathResult + " === 'F · 0 из 100'");
+  await saveAssessment(allScores(""));
+  await go("/subjects", "Мои предметы");
+  await go("/subjects/programming", "Программирование");
+  const programmingResult = "document.querySelector('output[aria-labelledby=assessment-programming-result-label]')?.textContent";
+  const programmingSave = "document.querySelector('#assessment-programming-rk1').form.querySelector('button[type=submit]')";
+  await wait(programmingResult + " === 'B' && " + programmingSave + ".disabled");
+  await fill(assessmentInput("rk1", "programming"), "80");
+  await wait(programmingResult + " === '—'");
+  await fill(assessmentInput("rk1", "programming"), "");
+  await wait(programmingResult + " === 'B' && " + programmingSave + ".disabled");
+  await saveAssessment({ rk1: "80" }, "programming");
+  await go("/subjects", "Мои предметы");
   assert.doesNotMatch(await text(), /3\.60|1\.20/);
   assert.equal(await evaluate("[...document.querySelectorAll('section p.text-3xl')].slice(0,2).every(el => el.textContent === '—')"), true);
-  await select("#grade-math", "A");
-  await select("#grade-programming", "B");
+  await go("/subjects/math", "Математика");
+  await saveAssessment(allScores("95"));
+  await go("/subjects", "Мои предметы");
+  await go("/subjects/programming", "Программирование");
+  await saveAssessment(allScores("80"), "programming");
   await go("/setup", "Выбор учебного плана");
   await select("#plan-group", "se-25-1");
   await click("[...document.querySelectorAll('button')].find(el => el.textContent === 'Добавить в локальный план')");
   await go("/subjects", "Мои предметы");
   await select("#subjects-semester", "1");
-  await select("#grade-design", "F");
+  await go("/subjects/design", "Введение в разработку");
+  await saveAssessment(allScores("0"), "design");
+  await go("/subjects", "Мои предметы");
+  await select("#subjects-semester", "1");
   assert.match(await text(), /1\.80/);
   assert.match(await text(), /0\.00/);
   await select("#subjects-semester", "3");
-  assert.equal(await evaluate("document.querySelector('#grade-math').value"), "A");
   assert.match(await text(), /3\.60/);
   // Все целевые страницы и макеты на требуемых ширинах.
   for (const width of [320, 360, 768, 1024, 1440]) {
@@ -158,14 +183,15 @@ try {
     }
   }
   await call("Page.navigate", { url: base + "/subjects" });
-  await wait("document.querySelector('#grade-math')");
-  await evaluate("document.querySelector('#grade-math').focus()");
+  const mathLink = "document.querySelector('main a[href=\"/subjects/math\"]')";
+  await wait(mathLink);
+  await evaluate(mathLink + ".focus()");
   await call("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
   await call("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
   assert.equal(await evaluate("document.activeElement.getAttribute('href')"), "/subjects/programming");
   await call("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
   await call("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
-  assert.equal(await evaluate("document.activeElement.id"), "grade-programming");
+  assert.equal(await evaluate("document.activeElement.getAttribute('href')"), "/subjects/english");
   await go("/logout", "Выход");
   await submitAuthForm();
   await wait("location.pathname === '/login' && document.querySelector('#demo-email')");
@@ -183,40 +209,43 @@ try {
   assert.match(await text(), /3\.60/);
   await go("/subjects", "Мои предметы");
   await go("/subjects/math", "Математика");
-  assert.deepEqual(await assessmentValues(), ["", "", "", ""]);
-  const rkPreview = "document.querySelector('output[aria-labelledby=assessment-math-rk-label]')?.textContent";
+  assert.deepEqual(await assessmentValues(), ["", "", ""]);
   await fill(assessmentInput("rk1"), "0");
-  await wait(rkPreview + " === 'F · 0 из 100'");
-  await fill(assessmentInput("rk2"), "101");
-  await wait(rkPreview + " === '—'");
-  await saveAssessment({ rk2: "0" });
+  await wait(mathResult + " === '—'");
+  assert.match(await text(), /GPA по предмету\s+—/);
+  await fill(assessmentInput("rk2"), "0");
+  await fill(assessmentInput("exam"), "101");
+  await wait(mathResult + " === '—'");
+  await fill(assessmentInput("exam"), "30");
+  await wait(mathResult + " === 'F · 12 из 100'");
+  assert.match(await text(), /GPA по предмету\s+0\.00/);
+  assert.match(await text(), /Взвешенные баллы\s+0\.00/);
+  assert.match(await text(), /Вклад в общий GPA\s+0\.00/);
+  await saveAssessment({});
   await visit("/progress", "Учебный прогресс");
-  assert.match(await text(), /Текущая оценка по РК\s+F · 0 из 100\s+Итоговая оценка для GPA\s+A/);
+  assert.match(await text(), /Итоговая оценка\s+F · 12 из 100/);
+  assert.match(await text(), /GPA семестра · по итоговым оценкам\s+1\.20/);
   await go("/subjects/math", "Математика");
   await fill(assessmentInput("rk1"), "78");
+  await wait(mathResult + " === 'FX · 35 из 100'");
   await fill(assessmentInput("rk2"), "92");
-  await wait(rkPreview + " === 'B+ · 85 из 100'");
-  await saveAssessment({ rk1: "78", rk2: "92", exam: "0" });
-  assert.deepEqual(await assessmentValues(), ["78", "92", "0", ""]);
-  assert.equal(await evaluate("document.querySelector('#detail-grade-math').value"), "A");
-  await go("/dashboard", "Главная");
-  await assertDashboardGpa("3.60");
-
-  await go("/subjects", "Мои предметы");
-  await go("/subjects/math", "Математика");
-  await saveAssessment({ finalScore: "85" });
-  assert.deepEqual(await assessmentValues(), ["78", "92", "0", "85"]);
-  assert.equal(await evaluate("document.querySelector('#detail-grade-math').value"), "B+");
+  await wait(mathResult + " === 'C− · 63 из 100'");
+  await fill(assessmentInput("exam"), "85");
+  await wait(mathResult + " === 'B+ · 85 из 100'");
   assert.match(await text(), /GPA по предмету\s+3\.33/);
+  assert.match(await text(), /Взвешенные баллы\s+9\.99/);
+  assert.match(await text(), /Вклад в общий GPA\s+2\.00/);
+  await saveAssessment({});
   await call("Page.reload");
-  await wait("document.querySelector('#assessment-math-finalScore')?.value === '85'");
-  assert.deepEqual(await assessmentValues(), ["78", "92", "0", "85"]);
+  await wait(mathResult + " === 'B+ · 85 из 100'");
+  assert.deepEqual(await assessmentValues(), ["78", "92", "85"]);
   await go("/dashboard", "Главная");
   await assertDashboardGpa("3.20");
 
   await select("#academic-calendar-preset", "yessenov");
   await visit("/progress", "Учебный прогресс");
   assert.match(await text(), /РК1 · 7-я неделя\s+78 из 100\s+РК2 · 15-я неделя\s+92 из 100/);
+  assert.match(await text(), /Экзамен\s+85 из 100\s+Итоговая оценка\s+B\+ · 85 из 100/);
   await select("#progress-semester", "4");
   assert.match(await text(), /GPA семестра · по итоговым оценкам\s+—\s+4 семестр/);
   assert.match(await text(), /В этом семестре пока нет предметов/);
@@ -230,7 +259,7 @@ try {
   await assertDashboardGpa("3.20");
   await go("/subjects", "Мои предметы");
   await go("/subjects/math", "Математика");
-  assert.deepEqual(await assessmentValues(), ["78", "92", "0", "85"]);
+  assert.deepEqual(await assessmentValues(), ["78", "92", "85"]);
 
   await go("/logout", "Выход");
   await submitAuthForm();
@@ -240,15 +269,15 @@ try {
   await wait("location.pathname === '/dashboard' && " + profileVisible(firstProfile));
   await call("Emulation.setDeviceMetricsOverride", { width: 360, height: 900, deviceScaleFactor: 1, mobile: false });
   await visit("/subjects/math", "Математика");
-  assert.deepEqual(await assessmentValues(), ["", "", "", ""]);
-  assert.equal(await evaluate("document.querySelector('#detail-grade-math').value"), "A");
+  assert.deepEqual(await assessmentValues(), ["95", "95", "95"]);
+  await wait(mathResult + " === 'A · 95 из 100'");
   assert.ok(await evaluate("innerWidth === 360 && document.documentElement.scrollWidth <= innerWidth"), "/subjects/math 360px");
   await visit("/subjects/unknown-qa-subject", "Предмет не найден");
   assert.ok(await evaluate("document.querySelector('main a[href=\"/subjects\"]')?.textContent === 'Мои предметы'"));
   assert.ok(await evaluate("document.documentElement.scrollWidth <= innerWidth"), "Неизвестный предмет 360px");
   assert.deepEqual(errors, []);
   console.log("PASS: профиль, страницы предметов и GPA, сохранение после перезагрузки и повторного входа, отдельные данные другого email, Tab, 10 маршрутов × 5 ширин.");
-  console.log("PASS: РК1, РК2, нулевой экзамен, итог 85 → B+, GPA 3.20, изоляция баллов, пустой семестр и карточка предмета на 360 px.");
+  console.log("PASS: РК1, РК2 и экзамен обновляют итог при вводе, 0/0/30 → F, итог 85 → B+, GPA 3.20, пустой семестр и карточка предмета на 360 px.");
 } finally {
   await call("Browser.close").catch(() => {});
   socket.close();
