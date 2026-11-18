@@ -54,6 +54,21 @@ test("границы, баллы и зачёт кредитов соответс
   }
 });
 
+test("оценка по РК учитывает ноль и округляет средний балл введённых контролей", () => {
+  const { calculateRkResult } = browser().loadProject(studentPath + "integration-adapter.ts");
+
+  assert.equal(calculateRkResult(null, undefined), null);
+  assert.deepEqual({ ...calculateRkResult(0, 0) }, { score: 0, grade: "F" });
+  assert.deepEqual({ ...calculateRkResult(0, null) }, { score: 0, grade: "F" });
+  assert.deepEqual({ ...calculateRkResult(undefined, 0) }, { score: 0, grade: "F" });
+  assert.deepEqual({ ...calculateRkResult(80, 90) }, { score: 85, grade: "B+" });
+  assert.deepEqual({ ...calculateRkResult(89, 90) }, { score: 90, grade: "A−" });
+  for (const invalid of [-1, 101, NaN, Infinity]) {
+    assert.equal(calculateRkResult(invalid, 80), null, `РК1: ${invalid}`);
+    assert.equal(calculateRkResult(80, invalid), null, `РК2: ${invalid}`);
+  }
+});
+
 for (const field of Object.keys(emptyScores)) {
   test(`${field}: пустой балл, явно введённый ноль и недопустимые значения`, () => {
     const { readPlan, savedScores } = gradingFixture();

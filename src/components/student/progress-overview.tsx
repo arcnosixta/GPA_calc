@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Badge, Button, Card, Field, Input, PageHeader, Select, buttonStyles } from "@/components/ui";
 import { academicCalendars } from "@/lib/academic-calendar";
 import { subjectDetailsPath } from "@/lib/site-routes";
-import { calculateGpa } from "./integration-adapter";
+import { calculateGpa, calculateRkResult } from "./integration-adapter";
 import { usePersonalPlan } from "./personal-plan";
 import { SessionState } from "./session-state";
 
@@ -135,6 +135,7 @@ export function ProgressOverview() {
         )}
         {visibleSubjects.map((subject) => {
           const assessment = assessments[subject.id];
+          const rkResult = calculateRkResult(assessment?.rk1, assessment?.rk2);
           return (
             <Card key={subject.id} className="min-w-0 space-y-4">
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -154,10 +155,16 @@ export function ProgressOverview() {
                   <dd className="mt-1 break-words text-sm font-medium">{assessmentValue(assessment?.rk2)}</dd>
                 </div>
               </dl>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                <span className="text-sm text-muted">Итоговая буквенная оценка</span>
-                <Badge variant={subject.grade === null ? "outline" : "strong"}>{subject.grade ?? "Ещё не выставлена"}</Badge>
-              </div>
+              <dl className="space-y-3 border-t border-border pt-4 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <dt className="text-muted">Текущая оценка по РК</dt>
+                  <dd>{rkResult ? <Badge variant="strong">{rkResult.grade} · {rkResult.score} из 100</Badge> : "Баллы ещё не внесены"}</dd>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <dt className="text-muted">Итоговая оценка для GPA</dt>
+                  <dd><Badge variant="outline">{subject.grade ?? "Ещё не выставлена"}</Badge></dd>
+                </div>
+              </dl>
             </Card>
           );
         })}

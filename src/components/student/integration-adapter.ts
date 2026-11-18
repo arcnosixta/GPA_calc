@@ -30,6 +30,15 @@ export function gradeFromScore(score: number): Grade | null {
   return gradeOptions.find((grade) => score >= gradeScale[grade].minimum) ?? null;
 }
 
+export function calculateRkResult(rk1: number | null | undefined, rk2: number | null | undefined) {
+  const enteredScores = [rk1, rk2].filter((score) => score != null);
+  if (enteredScores.length === 0 || !enteredScores.every(isAssessmentScore)) return null;
+
+  const score = Math.round(enteredScores.reduce((total, value) => total + value, 0) / enteredScores.length);
+  const grade = gradeFromScore(score);
+  return grade === null ? null : { score, grade };
+}
+
 export function earnsCredits(grade: Grade | null) {
   return grade !== null && gradePoints[grade] >= gradePoints.D;
 }
