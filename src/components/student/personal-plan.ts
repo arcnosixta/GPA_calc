@@ -7,14 +7,15 @@ import { useDemoCatalog, type DemoCatalog } from "@/lib/demo-catalog";
 import { demoSubjects } from "@/lib/demo-data";
 import { useDemoSession } from "@/lib/demo-session";
 import type { Grade, Subject } from "@/lib/types";
-import { gradeFromScore, gradeOptions, isAssessmentScore } from "./integration-adapter";
+import { calculateAssessmentResult, gradeFromScore, gradeOptions, isAssessmentScore, sameAssessmentScores, type SubjectAssessment } from "./integration-adapter";
 
-export type SubjectAssessment = { rk1: number | null; rk2: number | null; exam: number | null; finalScore: number | null };
+// Старые записи могут хранить итоговый балл отдельно от баллов за РК и экзамен.
+type StoredAssessment = SubjectAssessment & { finalScore?: number };
 type StudentProgress = {
   subjects: Subject[] | null;
   forecast: Record<string, Grade>;
   calendarId: AcademicCalendarId;
-  assessments: Record<string, SubjectAssessment>;
+  assessments: Record<string, StoredAssessment>;
 };
 type ProgressByEmail = Record<string, StudentProgress>;
 
@@ -48,8 +49,21 @@ function parseAssessment(value: unknown): SubjectAssessment {
     rk1: isAssessmentScore(scores.rk1) ? scores.rk1 : null,
     rk2: isAssessmentScore(scores.rk2) ? scores.rk2 : null,
     exam: isAssessmentScore(scores.exam) ? scores.exam : null,
-    finalScore: isAssessmentScore(scores.finalScore) && Number.isInteger(scores.finalScore) ? scores.finalScore : null,
   };
+}
+
+function parseStoredAssessment(value: unknown): StoredAssessment {
+  const scores = parseAssessment(value);
+  const finalScore = value && typeof value === "object" ? (value as Partial<StoredAssessment>).finalScore : undefined;
+  return isAssessmentScore(finalScore) && Number.isInteger(finalScore) ? { ...scores, finalScore } : scores;
+}
+
+function effectiveGrade(subject: Subject, assessment: StoredAssessment | undefined): Grade | null {
+  if (!assessment) return subject.grade;
+  if (assessment.rk1 !== null || assessment.rk2 !== null || assessment.exam !== null) {
+    return calculateAssessmentResult(assessment)?.grade ?? null;
+  }
+  return assessment.finalScore === undefined ? subject.grade : gradeFromScore(assessment.finalScore);
 }
 
 function parseProgress(raw: string): ProgressByEmail | null {
@@ -62,7 +76,7 @@ function parseProgress(raw: string): ProgressByEmail | null {
         .filter(([, grade]) => isGrade(grade)));
       const assessments = Object.fromEntries((subjects ?? [])
         .filter((subject) => progress?.assessments && Object.hasOwn(progress.assessments, subject.id))
-        .map((subject) => [subject.id, parseAssessment(progress?.assessments?.[subject.id])]));
+        .map((subject) => [subject.id, parseStoredAssessment(progress?.assessments?.[subject.id])]));
       const calendarId = isAcademicCalendarId(progress?.calendarId) ? progress.calendarId : defaultAcademicCalendarId;
       return [email, { subjects, forecast, assessments, calendarId }];
     });
@@ -102,7 +116,11 @@ export function usePersonalPlan() {
       return { ...subject, grade: example?.grade ?? null };
     });
   }, [catalog, groupId]);
-  const subjects = progress.subjects ?? initialSubjects;
+  const storedSubjects = progress.subjects ?? initialSubjects;
+  const subjects = useMemo(() => storedSubjects.map((subject) => {
+    const grade = effectiveGrade(subject, progress.assessments[subject.id]);
+    return grade === subject.grade ? subject : { ...subject, grade };
+  }), [storedSubjects, progress.assessments]);
 
   useEffect(() => {
     if (email) updateProgress(email, (current) => current.subjects === null
@@ -110,32 +128,17 @@ export function usePersonalPlan() {
       : current);
   }, [email, initialSubjects]);
 
-  function setGrade(id: string, grade: Grade | null) {
-    if (!email) return;
-    updateProgress(email, (current) => {
-      const plan = current.subjects ?? initialSubjects;
-      if (!plan.some((subject) => subject.id === id && subject.grade !== grade)) return current;
-      const previous = current.assessments[id];
-      const assessments = previous?.finalScore != null
-        ? { ...current.assessments, [id]: { ...previous, finalScore: null } }
-        : current.assessments;
-      return { ...current, assessments, subjects: plan.map((subject) => subject.id === id ? { ...subject, grade } : subject) };
-    });
-  }
-
   function setAssessment(id: string, assessment: SubjectAssessment) {
     if (!email) return;
     const scores = parseAssessment(assessment);
     updateProgress(email, (current) => {
+      if (sameAssessmentScores(scores, current.assessments[id])) return current;
       const plan = current.subjects ?? initialSubjects;
-      const subject = plan.find((item) => item.id === id);
-      if (!subject) return current;
-      const hadFinalScore = current.assessments[id]?.finalScore != null;
-      const grade = scores.finalScore !== null ? gradeFromScore(scores.finalScore) : hadFinalScore ? null : subject.grade;
+      if (!plan.some((subject) => subject.id === id)) return current;
       return {
         ...current,
         assessments: { ...current.assessments, [id]: scores },
-        subjects: plan.map((item) => item.id === id ? { ...item, grade } : item),
+        subjects: plan.map((subject) => subject.id === id ? { ...subject, grade: null } : subject),
       };
     });
   }
@@ -171,7 +174,7 @@ export function usePersonalPlan() {
   }
 
   return {
-    session, catalog, subjects, setGrade, addSubjects,
+    session, catalog, subjects, addSubjects,
     forecast: progress.forecast, setForecastGrade, resetForecast,
     calendarId: progress.calendarId, setAcademicCalendar,
     assessments: progress.assessments, setAssessment,

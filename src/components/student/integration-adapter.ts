@@ -30,11 +30,19 @@ export function gradeFromScore(score: number): Grade | null {
   return gradeOptions.find((grade) => score >= gradeScale[grade].minimum) ?? null;
 }
 
-export function calculateRkResult(rk1: number | null | undefined, rk2: number | null | undefined) {
-  const enteredScores = [rk1, rk2].filter((score) => score != null);
-  if (enteredScores.length === 0 || !enteredScores.every(isAssessmentScore)) return null;
+export const assessmentWeights = { rk1: 30, rk2: 30, exam: 40 } as const;
+export type SubjectAssessment = { rk1: number | null; rk2: number | null; exam: number | null };
 
-  const score = Math.round(enteredScores.reduce((total, value) => total + value, 0) / enteredScores.length);
+export function sameAssessmentScores(scores: SubjectAssessment, previous?: SubjectAssessment) {
+  return scores.rk1 === (previous?.rk1 ?? null) && scores.rk2 === (previous?.rk2 ?? null) && scores.exam === (previous?.exam ?? null);
+}
+
+export function calculateAssessmentResult(assessment?: SubjectAssessment) {
+  if (!assessment) return null;
+  const { rk1, rk2, exam } = assessment;
+  if (!isAssessmentScore(rk1) || !isAssessmentScore(rk2) || !isAssessmentScore(exam)) return null;
+
+  const score = Math.round((rk1 * assessmentWeights.rk1 + rk2 * assessmentWeights.rk2 + exam * assessmentWeights.exam) / 100);
   const grade = gradeFromScore(score);
   return grade === null ? null : { score, grade };
 }

@@ -6,7 +6,8 @@ const studentPath = "src/components/student/";
 const progressKey = "scholarpath.student-progress.v1";
 const email = "grading-qa@example.com";
 const subject = { id: "math", code: "MAT 201", title: "Математика", credits: 3, semester: 3, groupId: "is-24-1", grade: null };
-const emptyScores = { rk1: null, rk2: null, exam: null, finalScore: null };
+const secondSubject = { ...subject, id: "programming", code: "CS 201", title: "Программирование", credits: 2, grade: "B" };
+const emptyScores = { rk1: null, rk2: null, exam: null };
 
 // Приказ № 595, приложение 1 к Типовым правилам деятельности ОВПО.
 // https://www.gov.kz/org/control/documents/details/39111?lang=ru
@@ -25,17 +26,23 @@ const officialScale = [
   ["F", 0, 24, 0],
 ];
 
-function gradingFixture() {
+function gradingFixture({ grade = null, assessment, additionalSubjects = [] } = {}) {
   const profile = { firstName: "Демо", lastName: "Оценивание", universityId: "central", groupId: "is-24-1" };
+  const progress = {
+    subjects: [{ ...subject, grade }, ...additionalSubjects],
+    forecast: {},
+    assessments: assessment ? { [subject.id]: assessment } : {},
+  };
   const data = new Map([
     ["scholarpath.demo-session.v2", JSON.stringify({ active: { email, role: "student" }, profiles: { [email]: profile } })],
-    [progressKey, JSON.stringify({ [email]: { subjects: [subject], forecast: {}, assessments: {} } })],
+    [progressKey, JSON.stringify({ [email]: progress })],
   ]);
   const runtime = browser(data);
   const { usePersonalPlan: readPlan } = runtime.loadProject(studentPath + "personal-plan.ts");
   const { calculateGpa } = runtime.loadProject(studentPath + "integration-adapter.ts");
   const savedScores = () => JSON.parse(data.get(progressKey))[email].assessments[subject.id];
-  return { readPlan, calculateGpa, savedScores };
+  const reloadPlan = () => browser(data).loadProject(studentPath + "personal-plan.ts").usePersonalPlan();
+  return { readPlan, reloadPlan, calculateGpa, savedScores };
 }
 
 test("границы, баллы и зачёт кредитов соответствуют опубликованной шкале", () => {
@@ -54,74 +61,81 @@ test("границы, баллы и зачёт кредитов соответс
   }
 });
 
-test("оценка по РК учитывает ноль и округляет средний балл введённых контролей", () => {
-  const { calculateRkResult } = browser().loadProject(studentPath + "integration-adapter.ts");
-
-  assert.equal(calculateRkResult(null, undefined), null);
-  assert.deepEqual({ ...calculateRkResult(0, 0) }, { score: 0, grade: "F" });
-  assert.deepEqual({ ...calculateRkResult(0, null) }, { score: 0, grade: "F" });
-  assert.deepEqual({ ...calculateRkResult(undefined, 0) }, { score: 0, grade: "F" });
-  assert.deepEqual({ ...calculateRkResult(80, 90) }, { score: 85, grade: "B+" });
-  assert.deepEqual({ ...calculateRkResult(89, 90) }, { score: 90, grade: "A−" });
-  for (const invalid of [-1, 101, NaN, Infinity]) {
-    assert.equal(calculateRkResult(invalid, 80), null, `РК1: ${invalid}`);
-    assert.equal(calculateRkResult(80, invalid), null, `РК2: ${invalid}`);
+test("итоговая оценка учитывает оба РК и экзамен с весами 30/30/40", () => {
+  const { calculateAssessmentResult } = browser().loadProject(studentPath + "integration-adapter.ts");
+  const cases = [
+    [{ rk1: 0, rk2: 0, exam: 0 }, { score: 0, grade: "F" }],
+    [{ rk1: 100, rk2: 0, exam: 0 }, { score: 30, grade: "FX" }],
+    [{ rk1: 0, rk2: 100, exam: 0 }, { score: 30, grade: "FX" }],
+    [{ rk1: 0, rk2: 0, exam: 100 }, { score: 40, grade: "FX" }],
+    [{ rk1: 0, rk2: 0, exam: 30 }, { score: 12, grade: "F" }],
+    [{ rk1: 80, rk2: 90, exam: 100 }, { score: 91, grade: "A−" }],
+    [{ rk1: 88.5, rk2: 88.5, exam: 91 }, { score: 90, grade: "A−" }],
+    [{ rk1: 100, rk2: 100, exam: 100 }, { score: 100, grade: "A" }],
+  ];
+  for (const [scores, expected] of cases) {
+    assert.deepEqual({ ...calculateAssessmentResult(scores) }, expected);
   }
 });
 
-for (const field of Object.keys(emptyScores)) {
-  test(`${field}: пустой балл, явно введённый ноль и недопустимые значения`, () => {
-    const { readPlan, savedScores } = gradingFixture();
+test("итог появляется только с тремя допустимыми баллами", () => {
+  const { calculateAssessmentResult } = browser().loadProject(studentPath + "integration-adapter.ts");
+  const scores = { rk1: 0, rk2: 0, exam: 30 };
 
-    readPlan().setAssessment(subject.id, emptyScores);
-    assert.deepEqual(savedScores(), emptyScores);
-    readPlan().setAssessment(subject.id, { ...emptyScores, [field]: 0 });
-    assert.deepEqual(savedScores(), { ...emptyScores, [field]: 0 });
-
-    const invalidScores = [-1, 101, "0", "", NaN, Infinity];
-    if (field === "finalScore") invalidScores.push(89.5);
-    for (const invalid of invalidScores) {
-      readPlan().setAssessment(subject.id, { ...emptyScores, [field]: 0 });
-      readPlan().setAssessment(subject.id, { ...emptyScores, [field]: invalid });
-      assert.deepEqual(savedScores(), emptyScores, `${field}: ${invalid}`);
+  assert.equal(calculateAssessmentResult(), null);
+  assert.equal(calculateAssessmentResult(emptyScores), null);
+  for (const field of Object.keys(scores)) {
+    for (const invalid of [null, undefined, -1, 101, "0", "", NaN, Infinity]) {
+      assert.equal(calculateAssessmentResult({ ...scores, [field]: invalid }), null, `${field}: ${invalid}`);
     }
-  });
-}
+  }
+});
 
-test("GPA следует подтверждённому итогу, а РК1, РК2 и экзамен остаются отдельными баллами", () => {
-  const { readPlan, calculateGpa, savedScores } = gradingFixture();
-  const scores = { rk1: 91.5, rk2: 95, exam: 100, finalScore: null };
-  const checkGrade = (grade, gpa) => {
-    const { subjects } = readPlan();
+test("сохранённые оценки без баллов РК и экзамена остаются доступными", () => {
+  const rawGrade = gradingFixture({ grade: "A" });
+  const oldFinalScore = gradingFixture({ assessment: { ...emptyScores, finalScore: 91 } });
+
+  assert.equal(rawGrade.readPlan().subjects[0].grade, "A");
+  assert.equal(oldFinalScore.reloadPlan().subjects[0].grade, "A−");
+  rawGrade.readPlan().setAssessment(subject.id, emptyScores);
+  oldFinalScore.readPlan().setAssessment(subject.id, emptyScores);
+  assert.equal(rawGrade.reloadPlan().subjects[0].grade, "A");
+  assert.equal(oldFinalScore.reloadPlan().subjects[0].grade, "A−");
+});
+
+test("сохранённые компоненты имеют приоритет над прежней оценкой и баллом ведомости", () => {
+  const lowScores = { rk1: 0, rk2: 0, exam: 30, finalScore: 96 };
+  const full = gradingFixture({ grade: "A", assessment: lowScores, additionalSubjects: [secondSubject] });
+  const partial = gradingFixture({ grade: "A", assessment: { ...lowScores, rk2: null } });
+
+  assert.equal(full.readPlan().subjects[0].grade, "F");
+  assert.equal(full.calculateGpa(full.reloadPlan().subjects), 1.2);
+  assert.equal(partial.readPlan().subjects[0].grade, null);
+  assert.equal(partial.calculateGpa(partial.reloadPlan().subjects), null);
+});
+
+test("GPA пересчитывается после сохранения, повторного чтения и очистки баллов", () => {
+  const { readPlan, reloadPlan, calculateGpa, savedScores } = gradingFixture({
+    grade: "A",
+    assessment: { ...emptyScores, finalScore: 96 },
+    additionalSubjects: [secondSubject],
+  });
+  const complete = { rk1: 80, rk2: 90, exam: 100 };
+  const partial = { ...complete, exam: null };
+  const checkAfterReload = (grade, gpa) => {
+    const { subjects } = reloadPlan();
     assert.equal(subjects[0].grade, grade);
     assert.equal(calculateGpa(subjects), gpa);
   };
 
-  readPlan().setAssessment(subject.id, scores);
-  assert.deepEqual(savedScores(), scores);
-  checkGrade(null, null);
+  readPlan().setAssessment(subject.id, complete);
+  assert.deepEqual(savedScores(), complete);
+  checkAfterReload("A−", (3 * 3.67 + 2 * 3) / 5);
 
-  const confirmed = { ...scores, finalScore: 84 };
-  readPlan().setAssessment(subject.id, confirmed);
-  assert.deepEqual(savedScores(), confirmed);
-  checkGrade("B", 3);
+  readPlan().setAssessment(subject.id, partial);
+  assert.deepEqual(savedScores(), partial);
+  checkAfterReload(null, 3);
 
-  const edited = { ...confirmed, rk1: 0, rk2: null, exam: 42 };
-  readPlan().setAssessment(subject.id, edited);
-  assert.deepEqual(savedScores(), edited);
-  checkGrade("B", 3);
-
-  readPlan().setAssessment(subject.id, { ...edited, finalScore: 25 });
-  checkGrade("FX", 0.5);
-  readPlan().setAssessment(subject.id, { ...edited, finalScore: 0 });
-  checkGrade("F", 0);
-
-  readPlan().setAssessment(subject.id, { ...edited, finalScore: null });
-  assert.deepEqual(savedScores(), { ...edited, finalScore: null });
-  checkGrade(null, null);
-
-  readPlan().setAssessment(subject.id, confirmed);
-  readPlan().setGrade(subject.id, "A");
-  assert.deepEqual(savedScores(), scores);
-  checkGrade("A", 4);
+  readPlan().setAssessment(subject.id, emptyScores);
+  checkAfterReload(null, 3);
 });

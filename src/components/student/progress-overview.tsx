@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Badge, Button, Card, Field, Input, PageHeader, Select, buttonStyles } from "@/components/ui";
 import { academicCalendars } from "@/lib/academic-calendar";
 import { subjectDetailsPath } from "@/lib/site-routes";
-import { calculateGpa, calculateRkResult } from "./integration-adapter";
+import { calculateAssessmentResult, calculateGpa } from "./integration-adapter";
 import { usePersonalPlan } from "./personal-plan";
 import { SessionState } from "./session-state";
 
@@ -107,7 +107,7 @@ export function ProgressOverview() {
       <section aria-labelledby="progress-subjects-title" className="space-y-4">
         <div>
           <h2 id="progress-subjects-title" className="text-xl font-semibold">Предметы · {semester} семестр</h2>
-          <p className="mt-1 text-sm leading-6 text-muted">Баллы РК и итоговую буквенную оценку можно изменить в карточке предмета.</p>
+          <p className="mt-1 text-sm leading-6 text-muted">Баллы РК и экзамена можно ввести в карточке предмета.</p>
         </div>
         {currentSubjects.length > 0 && (
           <Card className="space-y-4">
@@ -135,7 +135,7 @@ export function ProgressOverview() {
         )}
         {visibleSubjects.map((subject) => {
           const assessment = assessments[subject.id];
-          const rkResult = calculateRkResult(assessment?.rk1, assessment?.rk2);
+          const result = calculateAssessmentResult(assessment);
           return (
             <Card key={subject.id} className="min-w-0 space-y-4">
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -145,7 +145,7 @@ export function ProgressOverview() {
                 </div>
                 <Link href={subjectDetailsPath(subject.id)} className={buttonStyles("secondary")}>Оценки предмета</Link>
               </div>
-              <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <dl className="grid min-w-0 gap-3 sm:grid-cols-3">
                 <div className="min-w-0 rounded-lg border border-border bg-background p-3">
                   <dt className="text-sm text-muted">РК1 · {calendar.rk1Weeks}</dt>
                   <dd className="mt-1 break-words text-sm font-medium">{assessmentValue(assessment?.rk1)}</dd>
@@ -154,16 +154,16 @@ export function ProgressOverview() {
                   <dt className="text-sm text-muted">РК2 · {calendar.rk2Weeks}</dt>
                   <dd className="mt-1 break-words text-sm font-medium">{assessmentValue(assessment?.rk2)}</dd>
                 </div>
+                <div className="min-w-0 rounded-lg border border-border bg-background p-3">
+                  <dt className="text-sm text-muted">Экзамен</dt>
+                  <dd className="mt-1 break-words text-sm font-medium">{assessmentValue(assessment?.exam)}</dd>
+                </div>
               </dl>
-              <dl className="space-y-3 border-t border-border pt-4 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <dt className="text-muted">Текущая оценка по РК</dt>
-                  <dd>{rkResult ? <Badge variant="strong">{rkResult.grade} · {rkResult.score} из 100</Badge> : "Баллы ещё не внесены"}</dd>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <dt className="text-muted">Итоговая оценка для GPA</dt>
-                  <dd><Badge variant="outline">{subject.grade ?? "Ещё не выставлена"}</Badge></dd>
-                </div>
+              <dl className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-sm">
+                <dt className="text-muted">Итоговая оценка</dt>
+                <dd><Badge variant={subject.grade === null ? "outline" : "strong"}>
+                  {result ? `${result.grade} · ${result.score} из 100` : subject.grade ?? "Ещё не рассчитана"}
+                </Badge></dd>
               </dl>
             </Card>
           );
