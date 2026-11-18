@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
+import { Badge, Button, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
 import { academicCalendars } from "@/lib/academic-calendar";
 import { subjectDetailsPath } from "@/lib/site-routes";
 import { calculateGpa } from "./integration-adapter";
 import { usePersonalPlan } from "./personal-plan";
 import { SessionState } from "./session-state";
+
+type GradeFilter = "all" | "graded" | "ungraded";
 
 function academicYearLabel() {
   const now = new Date();
@@ -22,6 +24,7 @@ function assessmentValue(score: number | null | undefined) {
 export function ProgressOverview() {
   const { session, catalog, subjects, calendarId, assessments } = usePersonalPlan();
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   if (!session?.profile) return <SessionState session={session} />;
 
   const profile = session.profile;
@@ -31,6 +34,10 @@ export function ProgressOverview() {
   const semesters = [course * 2 - 1, course * 2];
   const semester = selectedSemester ?? semesters[0];
   const currentSubjects = subjects.filter((subject) => subject.semester === semester);
+  const visibleSubjects = currentSubjects.filter((subject) => {
+    const hasFinalGrade = subject.grade !== null;
+    return gradeFilter === "all" || (gradeFilter === "graded" ? hasFinalGrade : !hasFinalGrade);
+  });
   const calendar = academicCalendars[calendarId];
   const semesterGpa = calculateGpa(currentSubjects);
 
@@ -93,7 +100,22 @@ export function ProgressOverview() {
           <h2 id="progress-subjects-title" className="text-xl font-semibold">Предметы · {semester} семестр</h2>
           <p className="mt-1 text-sm leading-6 text-muted">Баллы РК и итоговую буквенную оценку можно изменить в карточке предмета.</p>
         </div>
-        {currentSubjects.length ? currentSubjects.map((subject) => {
+        {currentSubjects.length > 0 && (
+          <Card className="flex flex-wrap items-end gap-4">
+            <div className="w-full min-w-0 sm:max-w-xs">
+              <Field label="Итоговая оценка" htmlFor="progress-grade-filter">
+                <Select id="progress-grade-filter" value={gradeFilter}
+                  onChange={(event) => setGradeFilter(event.target.value as GradeFilter)}>
+                  <option value="all">Все</option>
+                  <option value="graded">С итоговой оценкой</option>
+                  <option value="ungraded">Без итоговой оценки</option>
+                </Select>
+              </Field>
+            </div>
+            <Button variant="secondary" onClick={() => setGradeFilter("all")}>Сбросить фильтр</Button>
+          </Card>
+        )}
+        {visibleSubjects.map((subject) => {
           const assessment = assessments[subject.id];
           return (
             <Card key={subject.id} className="min-w-0 space-y-4">
@@ -120,13 +142,19 @@ export function ProgressOverview() {
               </div>
             </Card>
           );
-        }) : (
+        })}
+        {visibleSubjects.length === 0 && (currentSubjects.length > 0 ? (
+          <Card>
+            <h3 className="font-semibold">Предметы не найдены</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">Выберите другой фильтр или сбросьте его.</p>
+          </Card>
+        ) : (
           <Card>
             <h3 className="font-semibold">В этом семестре пока нет предметов</h3>
             <p className="mt-2 text-sm leading-6 text-muted">Предметы появятся здесь после добавления в личный учебный план.</p>
             <Link href="/setup" className={buttonStyles("secondary") + " mt-4"}>Подобрать предметы</Link>
           </Card>
-        )}
+        ))}
       </section>
     </div>
   );
