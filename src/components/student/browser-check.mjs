@@ -184,6 +184,18 @@ try {
   await go("/subjects", "Мои предметы");
   await go("/subjects/math", "Математика");
   assert.deepEqual(await assessmentValues(), ["", "", "", ""]);
+  const rkPreview = "document.querySelector('output[aria-labelledby=assessment-math-rk-label]')?.textContent";
+  await fill(assessmentInput("rk1"), "0");
+  await wait(rkPreview + " === 'F · 0 из 100'");
+  await fill(assessmentInput("rk2"), "101");
+  await wait(rkPreview + " === '—'");
+  await saveAssessment({ rk2: "0" });
+  await visit("/progress", "Учебный прогресс");
+  assert.match(await text(), /Текущая оценка по РК\s+F · 0 из 100\s+Итоговая оценка для GPA\s+A/);
+  await go("/subjects/math", "Математика");
+  await fill(assessmentInput("rk1"), "78");
+  await fill(assessmentInput("rk2"), "92");
+  await wait(rkPreview + " === 'B+ · 85 из 100'");
   await saveAssessment({ rk1: "78", rk2: "92", exam: "0" });
   assert.deepEqual(await assessmentValues(), ["78", "92", "0", ""]);
   assert.equal(await evaluate("document.querySelector('#detail-grade-math').value"), "A");
