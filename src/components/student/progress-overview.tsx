@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, Card, Field, PageHeader, Select, buttonStyles } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, PageHeader, Select, buttonStyles } from "@/components/ui";
 import { academicCalendars } from "@/lib/academic-calendar";
 import { subjectDetailsPath } from "@/lib/site-routes";
 import { calculateGpa } from "./integration-adapter";
@@ -25,6 +25,7 @@ export function ProgressOverview() {
   const { session, catalog, subjects, calendarId, assessments } = usePersonalPlan();
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
+  const [search, setSearch] = useState("");
   if (!session?.profile) return <SessionState session={session} />;
 
   const profile = session.profile;
@@ -34,12 +35,20 @@ export function ProgressOverview() {
   const semesters = [course * 2 - 1, course * 2];
   const semester = selectedSemester ?? semesters[0];
   const currentSubjects = subjects.filter((subject) => subject.semester === semester);
+  const query = search.trim().toLowerCase();
   const visibleSubjects = currentSubjects.filter((subject) => {
     const hasFinalGrade = subject.grade !== null;
-    return gradeFilter === "all" || (gradeFilter === "graded" ? hasFinalGrade : !hasFinalGrade);
+    const matchesGrade = gradeFilter === "all" || (gradeFilter === "graded" ? hasFinalGrade : !hasFinalGrade);
+    const matchesSearch = subject.title.toLowerCase().includes(query) || subject.code.toLowerCase().includes(query);
+    return matchesGrade && matchesSearch;
   });
   const calendar = academicCalendars[calendarId];
   const semesterGpa = calculateGpa(currentSubjects);
+
+  function resetFilters() {
+    setSearch("");
+    setGradeFilter("all");
+  }
 
   return (
     <div className="min-w-0 space-y-6">
@@ -101,8 +110,12 @@ export function ProgressOverview() {
           <p className="mt-1 text-sm leading-6 text-muted">Баллы РК и итоговую буквенную оценку можно изменить в карточке предмета.</p>
         </div>
         {currentSubjects.length > 0 && (
-          <Card className="flex flex-wrap items-end gap-4">
-            <div className="w-full min-w-0 sm:max-w-xs">
+          <Card className="space-y-4">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+              <Field label="Поиск по названию или коду" htmlFor="progress-subject-search">
+                <Input id="progress-subject-search" type="search" value={search}
+                  onChange={(event) => setSearch(event.target.value)} />
+              </Field>
               <Field label="Итоговая оценка" htmlFor="progress-grade-filter">
                 <Select id="progress-grade-filter" value={gradeFilter}
                   onChange={(event) => setGradeFilter(event.target.value as GradeFilter)}>
@@ -112,7 +125,9 @@ export function ProgressOverview() {
                 </Select>
               </Field>
             </div>
-            <Button variant="secondary" onClick={() => setGradeFilter("all")}>Сбросить фильтр</Button>
+            <Button variant="secondary" onClick={resetFilters} disabled={!search && gradeFilter === "all"}>
+              Сбросить фильтры
+            </Button>
           </Card>
         )}
         {visibleSubjects.map((subject) => {
@@ -146,7 +161,7 @@ export function ProgressOverview() {
         {visibleSubjects.length === 0 && (currentSubjects.length > 0 ? (
           <Card>
             <h3 className="font-semibold">Предметы не найдены</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">Выберите другой фильтр или сбросьте его.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">Измените запрос или сбросьте фильтры.</p>
           </Card>
         ) : (
           <Card>
