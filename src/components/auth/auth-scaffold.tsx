@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Badge, Button, Card, Field, Input, PageHeader, buttonStyles } from "@/components/ui";
 import { siteRoutes } from "@/lib/site-routes";
 import { DemoSessionForm, type DemoSessionPage } from "./demo-session-form";
+import { SupabaseAuthForm } from "./supabase-auth-form";
+import { isSupabaseMode } from "@/lib/data/mode";
 
 type AuthPage = DemoSessionPage | "verifyEmail" | "forgotPassword" | "resetPassword";
 type AuthField = { id: string; label: string; type: "text" | "email" | "password"; placeholder: string };
@@ -59,6 +61,14 @@ function AuthLinks({ page }: { page: AuthPage }) {
 
 export function AuthScaffold({ page }: { page: AuthPage }) {
   const route = siteRoutes[page];
+  if (isSupabaseMode) return <>
+    <PageHeader eyebrow="Аккаунт ScholarPath" title={route.title} />
+    <Card className="space-y-6">
+      <Badge>Личный аккаунт</Badge>
+      <SupabaseAuthForm key={page} page={page} />
+      <div className="border-t border-border pt-6"><AuthLinks page={page} /></div>
+    </Card>
+  </>;
   const form = forms[page];
   const isDemoSessionPage = page === "login" || page === "register" || page === "logout";
   return (
