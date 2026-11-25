@@ -1,3 +1,5 @@
+import { DatabaseManagement } from "@/components/management/database-management";
+import { isSupabaseMode } from "@/lib/data/mode";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ManagementCatalog } from "@/components/management/management-catalog";
@@ -6,6 +8,7 @@ import { Badge, PageHeader } from "@/components/ui";
 export const metadata: Metadata = { title: "Управление" };
 
 export default function Page() {
+  if (isSupabaseMode) return <DatabaseManagement section="catalog" />;
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
