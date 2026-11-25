@@ -26,6 +26,14 @@ npm run dev
 | `npm start` | Запуск собранного приложения после `npm run build` |
 | `npm run lint` | Проверка ESLint |
 
+## Автодеплой Vercel
+
+Проект `scholarpath` подключён к GitHub `arcnosixta/GPA_calc`. Каждый push в `main` запускает production-сборку командой `npm run build` из корня репозитория. Рабочий компьютер после push можно выключить.
+
+Адрес сайта: https://scholarpath-arcnosixtas-projects.vercel.app. Статус сборок: https://vercel.com/arcnosixtas-projects/scholarpath.
+
+В Vercel настроены `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` для Production, Preview и Development. `NEXT_PUBLIC_DATA_MODE=supabase` включает реальные аккаунты и данные; без этого значения используется деморежим с localStorage. После изменения переменных требуется новая сборка. SQL-миграции применяются отдельно владельцем БД.
+
 ## Структура Next.js-проекта
 
 - `src/app/page.tsx` — переход на вход. Главная учебная страница находится в `src/app/(workspace)/dashboard/page.tsx`.
