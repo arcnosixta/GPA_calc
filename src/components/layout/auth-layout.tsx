@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
 import { siteRoutes } from "@/lib/site-routes";
+import { isSupabaseMode } from "@/lib/data/mode";
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -39,15 +40,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 
         <main id="main-content" tabIndex={-1} className="min-w-0 outline-none">
           <div className="mb-6">
-            <Badge variant="outline">Демонстрационный экран</Badge>
-            <p className="mt-3 text-xs leading-5 text-muted">Демопрофиль и учебные данные сохраняются в этом браузере.</p>
+            <Badge variant="outline">{isSupabaseMode ? "Личный аккаунт" : "Демонстрационный экран"}</Badge>
+            <p className="mt-3 text-xs leading-5 text-muted">{isSupabaseMode ? "Войдите, чтобы открыть свои сохранённые учебные данные." : "Демопрофиль и учебные данные сохраняются в этом браузере."}</p>
           </div>
           {children}
         </main>
       </div>
 
       <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs leading-5 text-muted sm:px-8">
-        ScholarPath · Аккаунты и отправка писем появятся на этапе подключения сервера.
+        {isSupabaseMode ? "ScholarPath · Твой учебный путь" : "ScholarPath · Аккаунты и отправка писем появятся на этапе подключения сервера."}
       </footer>
     </div>
   );
