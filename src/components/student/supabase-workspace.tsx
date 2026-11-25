@@ -2,22 +2,27 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, PageHeader } from "@/components/ui";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, Card, Field, Input, PageHeader } from "@/components/ui";
+import { WorkspaceShell } from "@/components/layout/app-shell";
 import { SupabaseProfileForm } from "@/components/auth/supabase-profile-form";
 import { dataErrorMessage } from "@/lib/data/errors";
 import { readAccount, readProfileCatalog, type Account, type ProfileCatalog } from "@/lib/data/profile";
 import { readStudyData, validateYear, type StudyData } from "@/lib/data/student";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { resolveWorkspaceView, siteRoutes } from "@/lib/site-routes";
 import { calculateGpa, earnsCredits } from "./integration-adapter";
 import { SupabaseAssessment } from "./supabase-assessment";
 import { SupabasePlanSetup } from "./supabase-plan-setup";
 import { SupabaseCalendar } from "./supabase-calendar";
 
-const links = [["/dashboard", "Главная"], ["/profile", "Профиль"], ["/setup", "Настройка плана"], ["/subjects", "Предметы"], ["/progress", "Прогресс"]] as const;
 type Loaded = { account: Account; catalog: ProfileCatalog; study: StudyData };
 
-export function SupabaseWorkspace() {
+function hasCompleteProfile(account: Account) {
+  return Boolean(account.profile.first_name.trim() && account.profile.last_name.trim() && account.profile.group_id);
+}
+
+export function SupabaseWorkspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const search = useSearchParams();
   const router = useRouter();
@@ -32,11 +37,16 @@ export function SupabaseWorkspace() {
       const account = await readAccount();
       if (request !== generation.current) return;
       if (!account) { router.replace("/login"); return; }
-      const [catalog, study] = await Promise.all([readProfileCatalog(), readStudyData()]);
+      const view = resolveWorkspaceView(pathname, account.role, hasCompleteProfile(account));
+      const [catalog, study] = await Promise.all([
+        readProfileCatalog(),
+        view === "study" && pathname !== "/profile" ? readStudyData() :
+          Promise.resolve<StudyData>({ results: [], forecasts: [], subjects: [], semesters: [], plans: [] }),
+      ]);
       if (request === generation.current) setState({ account, catalog, study });
     } catch (error) { if (request === generation.current) setError(dataErrorMessage(error)); }
     finally { if (request === generation.current) setLoading(false); }
-  }, [router]);
+  }, [router, pathname]);
   useEffect(() => {
     let active = true;
     const initial = setTimeout(() => { if (active) void reload(); }, 0);
@@ -62,26 +72,28 @@ export function SupabaseWorkspace() {
   const requestedYear = search.get("year");
   const year = requestedYear && /^\d{4}-\d{4}$/.test(requestedYear) && Number(requestedYear.slice(5)) === Number(requestedYear.slice(0, 4)) + 1 ? requestedYear : `${start}-${start + 1}`;
 
-  return <div className="min-h-screen">
-    <a href="#main-content" className="sr-only focus:not-sr-only">Перейти к содержимому</a>
-    <header className="border-b border-border bg-surface p-4 sm:px-8">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4"><Link href="/dashboard" className="text-xl font-semibold">ScholarPath.</Link><Badge>Личный аккаунт</Badge><Link href="/logout" className="underline">Выйти</Link></div>
-      <nav aria-label="Учебное пространство" className="mx-auto mt-4 flex max-w-5xl flex-wrap gap-2">{links.map(([path, title]) => <Link key={path} href={`${path}?year=${year}`} aria-current={pathname === path ? "page" : undefined} className={`rounded-lg px-3 py-3 text-sm ${pathname === path ? "bg-primary text-primary-foreground" : "bg-surface-muted"}`}>{title}</Link>)}</nav>
-    </header>
-    <main id="main-content" className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8">
-      {loading ? <p role="status">Восстанавливаем сеанс и загружаем данные…</p> : error ? <Card className="space-y-4"><p role="alert">{error}</p><Button onClick={() => void reload()}>Повторить подключение</Button><Link href="/login" className="ml-4 underline">Войти снова</Link></Card> : state ? <>
-        {!state.account.profile.first_name.trim() || !state.account.profile.last_name.trim() || !state.account.profile.group_id ? <section role="dialog" aria-modal="false" aria-labelledby="complete-profile" className="mx-auto max-w-lg">
-          <h1 id="complete-profile" className="mb-4 text-2xl font-semibold">Заполните профиль</h1>
-          <Card><SupabaseProfileForm account={state.account} catalog={state.catalog} onSaved={(profile) => setState({ ...state, account: { ...state.account, profile } })} /></Card>
-        </section> : <>
-          <PageHeader title={pathname.startsWith("/subjects/") ? "Результаты предмета" : links.find(([path]) => path === pathname)?.[1] ?? "Учебное пространство"} description={`${state.account.profile.first_name} ${state.account.profile.last_name}`} />
-          {pathname !== "/profile" && <YearSelector key={year} year={year} onChange={(value) => router.replace(`${pathname}?year=${value}`)} />}
-          <WorkspaceContent key={`${state.account.user.id}:${pathname}:${year}`} pathname={pathname} year={year} state={state} onSaved={refreshStudy} onProfile={(profile) => setState({ ...state, account: { ...state.account, profile } })} />
-        </>}
-      </> : <p role="status">Открываем страницу входа…</p>}
-    </main>
-    <footer className="mx-auto max-w-5xl px-4 pb-8 text-xs text-muted">ScholarPath · Данные личного аккаунта</footer>
-  </div>;
+  const view = state ? resolveWorkspaceView(pathname, state.account.role, hasCompleteProfile(state.account)) : null;
+  const content = loading ? <p role="status">Восстанавливаем сеанс и загружаем данные…</p> : error ?
+    <Card className="space-y-4"><p role="alert">{error}</p><Button onClick={() => void reload()}>Повторить подключение</Button><Link href="/login" className="ml-4 underline">Войти снова</Link></Card> : !state ?
+    <p role="status">Открываем страницу входа…</p> : view === "forbidden" ? <>
+      <PageHeader title="Раздел недоступен для этой роли" description="Доступ определяется ролью вашего аккаунта." />
+      <Link href="/management/history" className="underline">Открыть свой архив успеваемости</Link>
+    </> : view === "page" ? children : view === "onboarding" ?
+    <section role="dialog" aria-modal="false" aria-labelledby="complete-profile" className="mx-auto max-w-lg">
+      <h1 id="complete-profile" className="mb-4 text-2xl font-semibold">Заполните профиль</h1>
+      <Card><SupabaseProfileForm account={state.account} catalog={state.catalog} onSaved={() => void reload()} /></Card>
+    </section> : <>
+      <PageHeader title={pathname.startsWith("/subjects/") ? "Результаты предмета" : Object.values(siteRoutes).find((route) => route.path === pathname)?.title ?? "Учебное пространство"} description={`${state.account.profile.first_name} ${state.account.profile.last_name}`} />
+      {pathname !== "/profile" && <YearSelector key={year} year={year} onChange={(value) => router.replace(`${pathname}?year=${value}`)} />}
+      <WorkspaceContent key={`${state.account.user.id}:${pathname}:${year}`} pathname={pathname} year={year} state={state} onSaved={refreshStudy} onProfile={() => void reload()} />
+    </>;
+
+  if (!state) return <main id="main-content" className="mx-auto max-w-lg space-y-6 p-6">{content}</main>;
+  const group = state.catalog.groups.find((item) => item.id === state.account.profile.group_id);
+  return <WorkspaceShell role={state.account.role} mode="supabase" groupName={group?.name}
+    profile={{ firstName: state.account.profile.first_name, lastName: state.account.profile.last_name }}>
+    <div className="min-w-0 space-y-6">{content}</div>
+  </WorkspaceShell>;
 }
 
 function YearSelector({ year, onChange }: { year: string; onChange: (year: string) => void }) {

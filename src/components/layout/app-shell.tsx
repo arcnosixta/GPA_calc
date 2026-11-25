@@ -5,27 +5,45 @@ import { usePathname } from "next/navigation";
 import { useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { Icon, type IconName } from "@/components/ui/icon";
+import type { AppRole } from "@/lib/database";
 import { useDemoCatalog } from "@/lib/demo-catalog";
 import { demoRoleLabels, type DemoSession } from "@/lib/demo-session";
 import { isSubjectDetailsPath, siteRoutes, workspacePrimaryRoutes, type RouteId } from "@/lib/site-routes";
 import { WorkspaceSections } from "./workspace-sections";
 
 const navigationIcons: Partial<Record<RouteId, IconName>> = {
-  dashboard: "grid", profile: "cap", setup: "layers", subjects: "book", gamification: "star", management: "settings", history: "settings",
+  dashboard: "grid", profile: "cap", setup: "layers", subjects: "book", progress: "layers", gamification: "star", management: "settings", history: "settings",
 };
 
 export function AppShell({ children, session }: { children: ReactNode; session: DemoSession }) {
-  const pathname = usePathname();
   const { groups } = useDemoCatalog();
+  const group = groups.find((item) => item.id === session.profile?.groupId);
+  return (
+    <WorkspaceShell role={session.role} profile={session.profile} groupName={group?.name} mode="demo">
+      {children}
+    </WorkspaceShell>
+  );
+}
+
+export type WorkspaceShellProps = {
+  children: ReactNode;
+  role: AppRole;
+  profile: { firstName: string; lastName: string } | null;
+  groupName?: string;
+  mode: "demo" | "supabase";
+};
+
+export function WorkspaceShell({ children, role, profile, groupName, mode }: WorkspaceShellProps) {
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const subjectDetailsOpen = isSubjectDetailsPath(pathname);
   const current = subjectDetailsOpen ? siteRoutes.subjectDetails : Object.values(siteRoutes).find((item) => item.path === pathname);
-  const { profile, role } = session;
-  const group = groups.find((item) => item.id === profile?.groupId);
-  const name = profile ? `${profile.firstName} ${profile.lastName}` : "Настройка профиля";
-  const initials = profile ? (Array.from(profile.firstName)[0] + Array.from(profile.lastName)[0]).toUpperCase() : "SP";
-  const navigation: RouteId[] = [...workspacePrimaryRoutes, role === "student" ? "history" : "management"];
+  const firstName = profile?.firstName.trim() ?? "";
+  const lastName = profile?.lastName.trim() ?? "";
+  const name = [firstName, lastName].filter(Boolean).join(" ") || "Настройка профиля";
+  const initials = [firstName, lastName].map((part) => Array.from(part)[0] ?? "").join("").toUpperCase() || "SP";
+  const navigation = [...new Set<RouteId>([...workspacePrimaryRoutes, "progress", role === "student" ? "history" : "management"])];
 
   const links = navigation.map((id) => {
     const route = siteRoutes[id];
@@ -71,7 +89,7 @@ export function AppShell({ children, session }: { children: ReactNode; session: 
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-sm font-semibold">{initials}</span>
             <div className="min-w-0">
               <Link href={siteRoutes.profile.path} className="block truncate rounded text-sm font-semibold underline-offset-4 hover:underline">{name}</Link>
-              <p className="mt-1 text-xs text-muted">{group ? group.name + " · " : ""}{demoRoleLabels[role]}</p>
+              <p className="mt-1 text-xs text-muted">{groupName ? groupName + " · " : ""}{demoRoleLabels[role]}</p>
             </div>
           </div>
         </div>
@@ -86,15 +104,18 @@ export function AppShell({ children, session }: { children: ReactNode; session: 
             }
           }}>
           <div className="flex min-h-20 items-center justify-between gap-3 px-4 sm:px-8 lg:px-10">
-            <div className="lg:hidden">{brand}</div>
+            <div className="lg:hidden">
+              {brand}
+              {mode === "supabase" && <p className="mt-1 text-xs text-muted sm:hidden">{demoRoleLabels[role]}</p>}
+            </div>
             <div className="hidden items-center gap-3 text-sm lg:flex">
               <span className="text-muted">Моё пространство</span>
               <Icon name="chevron" className="size-3 text-muted" />
               <span>{current?.title ?? "Главная"}</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="hidden text-xs text-muted sm:block">{group ? group.name + " · " : ""}{demoRoleLabels[role]}</span>
-              <span className="hidden sm:inline-flex"><Badge variant="outline">Демоверсия</Badge></span>
+              <span className="hidden text-xs text-muted sm:block">{groupName ? groupName + " · " : ""}{demoRoleLabels[role]}</span>
+              <span className="hidden sm:inline-flex"><Badge variant="outline">{mode === "demo" ? "Демоверсия" : "Личный аккаунт"}</Badge></span>
               <button ref={menuButton} type="button" aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
                 aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen(!menuOpen)}
                 className="flex size-11 items-center justify-center rounded-lg border border-border lg:hidden">
@@ -114,7 +135,7 @@ export function AppShell({ children, session }: { children: ReactNode; session: 
         </main>
         <footer className="mx-auto flex max-w-6xl flex-col gap-2 px-4 pb-6 text-xs leading-5 text-muted sm:flex-row sm:justify-between sm:px-8 lg:px-10">
           <span>ScholarPath · Твой учебный путь</span>
-          <span>Демонстрационные данные · локальный сеанс</span>
+          <span>{mode === "demo" ? "Демонстрационные данные · локальный сеанс" : "Данные аккаунта · PostgreSQL"}</span>
         </footer>
       </div>
     </div>

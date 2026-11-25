@@ -11,7 +11,7 @@ const source = readFileSync(join(root, "src/lib/site-routes.ts"), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { siteRoutes, workspacePrimaryRoutes, catalogRoutes, redirectRoutes, canOpenWorkspaceRoute, isSubjectDetailsPath, subjectDetailsPath } = await import(
+const { siteRoutes, workspacePrimaryRoutes, catalogRoutes, redirectRoutes, canOpenWorkspaceRoute, resolveWorkspaceView, isSubjectDetailsPath, subjectDetailsPath } = await import(
   "data:text/javascript;base64," + Buffer.from(compiled).toString("base64")
 );
 const routes = Object.values(siteRoutes);
@@ -65,6 +65,67 @@ test("архив доступен всем, каталог модератору 
       assert.equal(canOpenWorkspaceRoute(siteRoutes[id].path, role), role !== "student", `${role} ${id}`);
     }
     assert.equal(canOpenWorkspaceRoute(siteRoutes.users.path, role), role === "admin", role);
+  }
+});
+
+test("модератор и администратор открывают управление без учебного профиля", () => {
+  const catalogPages = ["management", "universities", "programs", "groups", "semesters", "studyPlans", "moderation", "competitionManagement"];
+  for (const role of ["moderator", "admin"]) {
+    for (const id of catalogPages) {
+      assert.equal(resolveWorkspaceView(siteRoutes[id].path, role, false), "page", `${role} ${id}`);
+    }
+  }
+});
+
+test("страница пользователей доступна только администратору независимо от профиля", () => {
+  for (const profileComplete of [false, true]) {
+    assert.equal(resolveWorkspaceView(siteRoutes.users.path, "admin", profileComplete), "page");
+    for (const role of ["student", "moderator"]) {
+      assert.equal(resolveWorkspaceView(siteRoutes.users.path, role, profileComplete), "forbidden", role);
+    }
+  }
+});
+
+test("студенту запрещены служебные страницы до и после заполнения профиля", () => {
+  const staffPages = ["management", "universities", "programs", "groups", "semesters", "studyPlans", "moderation", "competitionManagement"];
+  for (const profileComplete of [false, true]) {
+    for (const id of staffPages) {
+      assert.equal(resolveWorkspaceView(siteRoutes[id].path, "student", profileComplete), "forbidden", id);
+    }
+  }
+});
+
+test("архив, геймификация и чаты сохраняют страницы для всех ролей без учебного профиля", () => {
+  const sharedPages = ["history", "gamification", "chats", "groupChat", "subjectChat"];
+  for (const role of ["student", "moderator", "admin"]) {
+    for (const profileComplete of [false, true]) {
+      for (const id of sharedPages) {
+        assert.equal(resolveWorkspaceView(siteRoutes[id].path, role, profileComplete), "page", `${role} ${id}`);
+      }
+    }
+  }
+});
+
+test("учебные страницы требуют заполнения профиля, личный кабинет доступен для настройки", () => {
+  const personalPaths = ["dashboard", "setup", "subjects", "progress", "goals", "simulator"]
+    .map((id) => siteRoutes[id].path);
+  personalPaths.push(subjectDetailsPath("math"));
+  for (const role of ["student", "moderator", "admin"]) {
+    assert.equal(resolveWorkspaceView(siteRoutes.profile.path, role, false), "study", role);
+    for (const path of personalPaths) {
+      assert.equal(resolveWorkspaceView(path, role, false), "onboarding", `${role} ${path}`);
+    }
+  }
+});
+
+test("заполненный профиль открывает учебное содержимое для всех ролей", () => {
+  const personalPaths = ["dashboard", "profile", "setup", "subjects", "progress", "goals", "simulator"]
+    .map((id) => siteRoutes[id].path);
+  personalPaths.push(subjectDetailsPath("math"));
+  for (const role of ["student", "moderator", "admin"]) {
+    for (const path of personalPaths) {
+      assert.equal(resolveWorkspaceView(path, role, true), "study", `${role} ${path}`);
+    }
   }
 });
 

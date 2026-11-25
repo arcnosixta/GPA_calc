@@ -82,3 +82,14 @@ export function canOpenWorkspaceRoute(path: string, role: DemoRole) {
   if (path === siteRoutes.users.path) return role === "admin";
   return role !== "student" || !staffOnlyRoutes.some((id) => siteRoutes[id].path === path);
 }
+
+export function resolveWorkspaceView(path: string, role: DemoRole, profileComplete: boolean) {
+  if (!canOpenWorkspaceRoute(path, role)) return "forbidden";
+  const personalPage = isSubjectDetailsPath(path) || [
+    siteRoutes.dashboard.path, siteRoutes.profile.path, siteRoutes.setup.path,
+    siteRoutes.subjects.path, siteRoutes.progress.path, siteRoutes.goals.path, siteRoutes.simulator.path,
+  ].some((route) => route === path);
+  if (!personalPage) return "page";
+  if (!profileComplete && path !== siteRoutes.profile.path) return "onboarding";
+  return "study";
+}
