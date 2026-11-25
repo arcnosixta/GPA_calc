@@ -3,6 +3,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
+  if (params.has("error")) {
+    const response = NextResponse.redirect(new URL("/login?error=oauth", request.url));
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
   const next = params.get("next") === "/reset-password" || params.get("type") === "recovery" ? "/reset-password" : "/dashboard";
   const failure = new URL(next === "/reset-password" ? "/forgot-password" : "/verify-email", request.url);
   failure.searchParams.set("error", "expired");

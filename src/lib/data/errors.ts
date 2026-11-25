@@ -9,8 +9,13 @@ export function dataErrorMessage(error: unknown): string {
   if (value?.status === 401 || value?.code === "PGRST301") return "Сеанс истёк. Войдите снова.";
   if (["23514", "23503", "22P02"].includes(value?.code ?? "")) return "Проверьте значения формы и актуальность выбранных записей.";
   if (value?.code === "invalid_credentials") return "Неверный email или пароль.";
+  if (value?.code === "provider_disabled") return "Вход через выбранного провайдера пока недоступен. Обратитесь к администратору сайта.";
+  if (value?.code === "validation_failed") return "Не удалось проверить параметры входа. Обновите страницу и повторите попытку. Если ошибка повторяется, сообщите администратору сайта.";
   if (value?.code === "email_not_confirmed") return "Подтвердите email по ссылке из письма.";
+  if (value?.code === "email_address_not_authorized") return "Почтовый сервис разрешает отправку только адресам команды проекта. Обратитесь к администратору сайта, чтобы он настроил отправку писем для остальных пользователей.";
   if (value?.code === "otp_expired" || value?.code === "flow_state_expired") return "Ссылка истекла. Запросите новое письмо.";
+  if (value?.code === "over_email_send_rate_limit") return "Достигнут лимит отправки писем почтового сервиса. Повторите запрос позже. Если ошибка повторяется, сообщите администратору сайта.";
+  if (value?.code === "over_request_rate_limit") return "Превышен лимит запросов с вашего подключения. Подождите несколько минут и повторите запрос вручную.";
   if (value?.status === 429) return "Слишком много попыток. Подождите и повторите запрос.";
   if (value?.code === "weak_password") return "Выберите более надёжный пароль.";
   if (error instanceof TypeError) return "Не удалось соединиться с сервером. Проверьте сеть и повторите попытку.";
