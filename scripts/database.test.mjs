@@ -4,10 +4,16 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, afterEach, before, beforeEach, describe, test } from "node:test";
+import { browser } from "../src/lib/browser-test-runtime.mjs";
 
 const projectRoot = process.env.SCHOLARPATH_TEST_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(join(projectRoot, "package.json"));
 const { PGlite } = require("@electric-sql/pglite");
+const { calculateAssessmentResult, calculateGpa, earnsCredits, gradePoints } = browser().loadProject(
+  join(projectRoot, "src", "components", "student", "integration-adapter.ts"),
+);
+
+const numberOrNull = (value) => value === null ? null : Number(value);
 
 const userIds = {
   student: "10000000-0000-4000-8000-000000000001",
@@ -183,6 +189,8 @@ describe("ScholarPath database migration and access rules", { concurrency: false
       await db.query("insert into public.assessments(student_subject_id, rk1, rk2, exam) values ($1, 80, 90, 100)", [row.id]);
       await db.query("insert into public.grade_forecasts(student_subject_id, grade) values ($1, 'A')", [row.id]);
       assert.equal((await db.query("select * from public.student_results where id = $1", [row.id])).rows.length, 1);
+      const own = await db.query("update public.assessments set exam = 95 where student_subject_id = $1 returning exam", [row.id]);
+      assert.equal(Number(own.rows[0].exam), 95);
       return row;
     });
     for (const viewer of [userIds.otherStudent, userIds.moderator, userIds.admin]) {
@@ -191,9 +199,24 @@ describe("ScholarPath database migration and access rules", { concurrency: false
           assert.equal((await db.query(`select * from public.${table} where ${column} = $1`, [personal.id])).rows.length, 0, `${viewer} can read ${table}`);
         }
         assert.equal((await db.query("update public.assessments set exam = 0 where student_subject_id = $1 returning student_subject_id", [personal.id])).rows.length, 0);
-        await expectSqlError("insert into public.grade_forecasts(student_subject_id, grade) values ($1, 'F')", [personal.id]);
+        assert.equal((await db.query("delete from public.grade_forecasts where student_subject_id = $1 returning student_subject_id", [personal.id])).rows.length, 0);
+        const missingGrant = await expectSqlError("delete from public.student_subjects where id = $1", [personal.id]);
+        assert.match(missingGrant.message, /permission denied/);
+        const insertPolicy = await expectSqlError("insert into public.grade_forecasts(student_subject_id, grade) values ($1, 'F')", [personal.id]);
+        assert.match(insertPolicy.message, /row-level security/);
+        const upsertPolicy = await expectSqlError(`
+          insert into public.assessments(student_subject_id, exam) values ($1, 0)
+          on conflict (student_subject_id) do update set exam = excluded.exam
+        `, [personal.id]);
+        assert.match(upsertPolicy.message, /row-level security/);
       });
     }
+    await asUser(userIds.student, async () => {
+      const { rows: [result] } = await db.query("select exam from public.student_results where id = $1", [personal.id]);
+      assert.equal(Number(result.exam), 95);
+      const { rows: forecasts } = await db.query("select grade from public.grade_forecasts where student_subject_id = $1", [personal.id]);
+      assert.deepEqual(forecasts, [{ grade: "A" }]);
+    });
   });
 
   test("moderator updates assigned subjects but cannot update subjects outside the assigned group", async () => {
@@ -205,6 +228,30 @@ describe("ScholarPath database migration and access rules", { concurrency: false
     });
     const { rows } = await db.query("select title from public.subjects where id in ('qa-other-a', 'qa-other-b')");
     assert.ok(rows.every((row) => row.title !== "Forbidden"));
+  });
+
+  test("moderator edits the assigned group plan while group metadata and assignments stay administrator-only", async () => {
+    await asUser(userIds.moderator, async () => {
+      const item = await db.query(`
+        insert into public.study_plan_items(group_id, subject_id, semester)
+        values ('qa-group-a1', 'qa-math', 5) returning semester
+      `);
+      assert.deepEqual(item.rows, [{ semester: 5 }]);
+      const foreignPlan = await expectSqlError("insert into public.study_plan_items(group_id, subject_id, semester) values ('qa-group-a2', 'qa-math', 5)");
+      assert.match(foreignPlan.message, /row-level security/);
+      const outside = await db.query("delete from public.study_plan_items where group_id = 'qa-group-a2' returning group_id");
+      assert.equal(outside.rows.length, 0);
+      const directory = await db.query("update public.study_groups set name = 'Forbidden' where id in ('qa-group-a1', 'qa-group-a2') returning id");
+      assert.equal(directory.rows.length, 0);
+      await expectSqlError("insert into public.moderator_groups(moderator_id, group_id) values ($1, 'qa-group-a2')", [userIds.moderator]);
+      await expectSqlError("select public.admin_set_user_role($1, 'moderator')", [userIds.otherStudent]);
+    });
+    await asUser(userIds.admin, async () => {
+      const { rows } = await db.query("select subject_id from public.study_plan_items where group_id = 'qa-group-a2'");
+      assert.deepEqual(rows, [{ subject_id: "qa-other-a" }]);
+      const groups = await db.query("select name from public.study_groups where id in ('qa-group-a1', 'qa-group-a2') order by id");
+      assert.deepEqual(groups.rows, [{ name: "A1" }, { name: "A2" }]);
+    });
   });
 
   test("moderator can create a university, empty program and subject while group creation remains restricted", async () => {
@@ -221,23 +268,32 @@ describe("ScholarPath database migration and access rules", { concurrency: false
 
   test("students cannot self-promote or call the administrator role RPC", async () => {
     await asUser(userIds.student, async () => {
+      const { rows } = await db.query("update public.subjects set title = 'Forbidden' where id = 'qa-math' returning id");
+      assert.equal(rows.length, 0);
+      await expectSqlError("insert into public.subjects(program_id, title, credits) values ('qa-program-a', 'Forbidden', 1)");
       await expectSqlError("update public.user_roles set role = 'admin' where user_id = $1", [userIds.student]);
       await expectSqlError("insert into public.user_roles(user_id, role) values ($1, 'admin')", [userIds.student]);
       await expectSqlError("select public.admin_set_user_role($1, 'moderator')", [userIds.student], ["42501", "P0001"]);
       await expectSqlError("insert into public.moderator_groups(moderator_id, group_id) values ($1, 'qa-group-b')", [userIds.student]);
     });
     assert.equal((await db.query("select role from public.user_roles where user_id = $1", [userIds.student])).rows[0].role, "student");
+    assert.equal((await db.query("select title from public.subjects where id = 'qa-math'")).rows[0].title, "Mathematics snapshot");
   });
 
   test("administrator RPC changes ordinary roles and protects self and administrator accounts", async () => {
     await asUser(userIds.admin, async () => {
       await expectSqlError("update public.user_roles set role = 'student' where user_id = $1", [userIds.admin]);
       await db.query("select public.admin_set_user_role($1, 'moderator')", [userIds.otherStudent]);
+      await db.query("insert into public.moderator_groups(moderator_id, group_id) values ($1, 'qa-group-a2')", [userIds.otherStudent]);
       await expectSqlError("select public.admin_set_user_role($1, 'admin')", [userIds.student], ["42501", "23514", "P0001"]);
       await expectSqlError("select public.admin_set_user_role($1, 'student')", [userIds.admin], ["42501", "23514", "P0001"]);
       await expectSqlError("select public.admin_set_user_role($1, 'student')", [userIds.otherAdmin], ["42501", "23514", "P0001"]);
     });
-    assert.equal((await db.query("select role from public.user_roles where user_id = $1", [userIds.otherStudent])).rows[0].role, "moderator");
+    await asUser(userIds.otherStudent, async () => {
+      assert.equal((await db.query("select role from public.user_roles where user_id = $1", [userIds.otherStudent])).rows[0].role, "moderator");
+      const { rows } = await db.query("select group_id from public.moderator_groups where moderator_id = $1", [userIds.otherStudent]);
+      assert.deepEqual(rows, [{ group_id: "qa-group-a2" }]);
+    });
     await db.query("update public.user_roles set role = 'student' where user_id = $1", [userIds.otherAdmin]);
     await asUser(userIds.admin, async () => {
       await expectSqlError("select public.admin_set_user_role($1, 'student')", [userIds.admin], ["42501", "23514", "P0001"]);
@@ -248,8 +304,10 @@ describe("ScholarPath database migration and access rules", { concurrency: false
   test("anonymous sessions cannot call role RPCs or read private records", async () => {
     await asUser(null, async () => {
       await expectSqlError("select public.admin_set_user_role($1, 'moderator')", [userIds.student], ["42501", "P0001"]);
-      await expectSqlError("select * from public.profiles");
-      await expectSqlError("select * from public.student_results");
+      for (const table of ["profiles", "student_subjects", "assessments", "grade_forecasts", "student_results"]) {
+        const denied = await expectSqlError(`select * from public.${table}`);
+        assert.match(denied.message, /permission denied/);
+      }
     }, "anon");
   });
 
@@ -268,23 +326,103 @@ describe("ScholarPath database migration and access rules", { concurrency: false
     });
   });
 
-  test("numeric assessment rounding gives 25/FX at the decimal boundary and partial scores stay ungraded", async () => {
+  test("saved assessment scores and grade points agree with JS at every threshold and for incomplete inputs", async () => {
+    const fixture = join(projectRoot, "supabase", "tests", "assessment-cases.sql");
+    await db.exec(await readFile(fixture, "utf8"));
+    const { rows: cases } = await db.query("select * from qa_assessment_cases order by name");
     await asUser(userIds.student, async () => {
-      const personal = await insertPersonalSubject();
-      await db.query("insert into public.assessments(student_subject_id, rk1, rk2, exam) values ($1, 4.1, 66.1, 8.6)", [personal.id]);
-      let result = (await db.query("select final_score, grade, grade_points from public.student_results where id = $1", [personal.id])).rows[0];
-      assert.equal(Number(result.final_score), 25);
-      assert.equal(result.grade, "FX");
-      assert.equal(Number(result.grade_points), 0.5);
-      await db.query("update public.assessments set rk1 = 0, rk2 = 0, exam = 0 where student_subject_id = $1", [personal.id]);
-      result = (await db.query("select final_score, grade, grade_points from public.student_results where id = $1", [personal.id])).rows[0];
-      assert.equal(Number(result.final_score), 0);
-      assert.equal(result.grade, "F");
-      await db.query("update public.assessments set exam = null where student_subject_id = $1", [personal.id]);
-      result = (await db.query("select final_score, grade, grade_points from public.student_results where id = $1", [personal.id])).rows[0];
-      assert.equal(result.final_score, null);
-      assert.equal(result.grade, null);
-      assert.equal(result.grade_points, null);
+      const { id } = await insertPersonalSubject();
+      const readResult = async () => (await db.query(`
+        select rk1, rk2, exam, final_score, grade, grade_points
+        from public.student_results where id = $1
+      `, [id])).rows[0];
+
+      assert.deepEqual(await readResult(), {
+        rk1: null, rk2: null, exam: null, final_score: null, grade: null, grade_points: null,
+      });
+      assert.equal(calculateAssessmentResult(), null);
+
+      for (const { name, rk1, rk2, exam, final_score, grade, grade_points } of cases) {
+        await db.query(`
+          insert into public.assessments(student_subject_id, rk1, rk2, exam)
+          values ($1, $2, $3, $4) on conflict (student_subject_id) do update
+          set rk1 = excluded.rk1, rk2 = excluded.rk2, exam = excluded.exam
+        `, [id, rk1, rk2, exam]);
+        const result = await readResult();
+        assert.deepEqual(result, { rk1, rk2, exam, final_score: final_score?.toString() ?? null, grade, grade_points }, name);
+
+        const js = calculateAssessmentResult({ rk1: numberOrNull(rk1), rk2: numberOrNull(rk2), exam: numberOrNull(exam) });
+        assert.equal(js?.score ?? null, final_score, name);
+        assert.equal(js?.grade ?? null, grade, name);
+        assert.equal(js ? gradePoints[js.grade] : null, numberOrNull(grade_points), name);
+      }
+    });
+  });
+
+  test("weighted GPA and earned credits match SQL results without rounding the GPA", async () => {
+    await db.exec(`
+      insert into public.subjects(id, program_id, code, title, credits)
+      values ('qa-gpa-b', 'qa-program-a', 'QA GPA B', 'Two-credit subject', 2)
+    `);
+    await asUser(userIds.student, async () => {
+      const first = await insertPersonalSubject();
+      const second = await insertPersonalSubject("qa-gpa-b");
+      await insertPersonalSubject("qa-other-a");
+      const checkGpa = async (gpa, gradedCredits, earnedCredits) => {
+        const { rows: [totals] } = await db.query(`
+          select sum(grade_points * credits) / nullif(sum(credits) filter (where grade is not null), 0) as gpa,
+            sum(credits) as planned,
+            coalesce(sum(credits) filter (where grade is not null), 0) as graded,
+            coalesce(sum(credits) filter (where grade_points >= 1), 0) as earned
+          from public.student_results where academic_year = '2026-2027' and semester = 3
+        `);
+        assert.equal(numberOrNull(totals.gpa), gpa);
+        assert.equal(Number(totals.planned), 10);
+        assert.equal(Number(totals.graded), gradedCredits);
+        assert.equal(Number(totals.earned), earnedCredits);
+        const { rows: subjects } = await db.query("select grade, credits from public.student_results where academic_year = '2026-2027' and semester = 3");
+        const jsGpa = calculateGpa(subjects);
+        if (gpa === null) assert.equal(jsGpa, null);
+        else assert.ok(jsGpa !== null && Math.abs(jsGpa - gpa) < 1e-12, `Expected GPA ${gpa}, got ${jsGpa}`);
+        assert.equal(subjects.filter(({ grade }) => earnsCredits(grade)).reduce((sum, { credits }) => sum + credits, 0), earnedCredits);
+      };
+
+      await checkGpa(null, 0, 0);
+      await db.query("insert into public.assessments(student_subject_id, rk1, rk2, exam) values ($1, 95, 95, 95), ($2, 80, 80, 80)", [first.id, second.id]);
+      await checkGpa(3.6, 5, 5);
+      for (const [score, gpa, earned] of [[0, 1.2, 2], [25, 1.5, 2], [90, 3.402, 5]]) {
+        await db.query("update public.assessments set rk1 = $1, rk2 = $1, exam = $1 where student_subject_id = $2", [score, first.id]);
+        await checkGpa(gpa, 5, earned);
+      }
+    });
+  });
+
+  test("forecast writes and retries preserve factual scores and server-derived fields", async () => {
+    await asUser(userIds.student, async () => {
+      const { id } = await insertPersonalSubject();
+      const saveScores = () => db.query("insert into public.assessments(student_subject_id, rk1, rk2, exam) values ($1, 4.1, 66.1, 8.6)", [id]);
+      const { rows: [grants] } = await db.query(`select
+        has_column_privilege('public.assessments', 'final_score', 'INSERT') as insert_score,
+        has_column_privilege('public.assessments', 'final_score', 'UPDATE') as update_score,
+        has_column_privilege('public.student_results', 'grade', 'UPDATE') as update_grade,
+        has_column_privilege('public.student_results', 'grade_points', 'UPDATE') as update_points
+      `);
+      assert.deepEqual(grants, { insert_score: false, update_score: false, update_grade: false, update_points: false });
+      await expectSqlError("insert into public.assessments(student_subject_id, final_score) values ($1, 100)", [id], ["42501", "428C9"]);
+      await saveScores();
+      await expectSqlError("update public.assessments set final_score = 100 where student_subject_id = $1", [id], ["42501", "428C9"]);
+      await expectSqlError("update public.student_results set grade = 'A', grade_points = 4 where id = $1", [id], ["42501", "55000"]);
+
+      const facts = () => db.query("select rk1, rk2, exam, final_score, grade, grade_points from public.student_results where id = $1", [id]);
+      const before = (await facts()).rows[0];
+      const saveForecast = "insert into public.grade_forecasts(student_subject_id, grade) values ($1, 'A')";
+      await db.query(saveForecast, [id]);
+      await expectSqlError(saveForecast, [id], ["23505"]);
+      await db.query("update public.grade_forecasts set grade = 'B' where student_subject_id = $1", [id]);
+      assert.deepEqual((await db.query("select grade from public.grade_forecasts where student_subject_id = $1", [id])).rows, [{ grade: "B" }]);
+      assert.deepEqual((await facts()).rows, [before]);
+      await db.query("delete from public.grade_forecasts where student_subject_id = $1", [id]);
+      assert.deepEqual((await facts()).rows, [before]);
     });
   });
 
@@ -299,6 +437,12 @@ describe("ScholarPath database migration and access rules", { concurrency: false
       const { rows } = await db.query("select semester, grade from public.student_results where id in ($1, $2) order by semester", [autumn.id, spring.id]);
       assert.deepEqual(rows.map(({ semester, grade }) => ({ semester, grade })), [{ semester: 3, grade: "A" }, { semester: 4, grade: "F" }]);
       await expectSqlError("insert into public.student_subjects(subject_id, academic_year, semester) values ('qa-math', '2026-2027', 3)", [], ["23505"]);
+      await expectSqlError(`
+        insert into public.student_subjects(subject_id, academic_year, semester)
+        values ('qa-math', '2026-2027', 5), ('qa-math', '2026-2027', 3)
+      `, [], ["23505"]);
+      const retry = await db.query("select id, semester from public.student_subjects where subject_id = 'qa-math' order by semester");
+      assert.deepEqual(retry.rows, [{ id: autumn.id, semester: 3 }, { id: spring.id, semester: 4 }]);
       await expectSqlError("insert into public.assessments(student_subject_id, rk1) values ($1, 50)", [autumn.id], ["23505"]);
     });
   });
@@ -317,6 +461,7 @@ describe("ScholarPath database migration and access rules", { concurrency: false
         await expectSqlError(`update public.student_subjects set ${column} = $1 where id = $2`, [value, personal.id]);
       }
       await expectSqlError("insert into public.student_subjects(subject_id, academic_year, semester, credits) values ('qa-math', '2027-2028', 3, 30)");
+      await expectSqlError("insert into public.student_subjects(subject_id, academic_year, semester, student_id) values ('qa-math', '2027-2028', 3, $1)", [userIds.otherStudent]);
     });
     const fresh = await asUser(userIds.otherStudent, () => insertPersonalSubject());
     assert.equal(fresh.credits, 7);

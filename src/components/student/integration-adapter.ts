@@ -33,6 +33,12 @@ export function gradeFromScore(score: number): Grade | null {
 export const assessmentWeights = { rk1: 30, rk2: 30, exam: 40 } as const;
 export type SubjectAssessment = { rk1: number | null; rk2: number | null; exam: number | null };
 
+function decimalScoreParts(score: number) {
+  const [mantissa, exponent = "0"] = String(score).split("e");
+  const [whole, fraction = ""] = mantissa.split(".");
+  return { units: BigInt(whole + fraction), places: fraction.length - Number(exponent) };
+}
+
 export function sameAssessmentScores(scores: SubjectAssessment, previous?: SubjectAssessment) {
   return scores.rk1 === (previous?.rk1 ?? null) && scores.rk2 === (previous?.rk2 ?? null) && scores.exam === (previous?.exam ?? null);
 }
@@ -42,7 +48,19 @@ export function calculateAssessmentResult(assessment?: SubjectAssessment) {
   const { rk1, rk2, exam } = assessment;
   if (!isAssessmentScore(rk1) || !isAssessmentScore(rk2) || !isAssessmentScore(exam)) return null;
 
-  const score = Math.round((rk1 * assessmentWeights.rk1 + rk2 * assessmentWeights.rk2 + exam * assessmentWeights.exam) / 100);
+  // Use the same decimal values the API sends to PostgreSQL numeric.
+  const rk1Parts = decimalScoreParts(rk1);
+  const rk2Parts = decimalScoreParts(rk2);
+  const examParts = decimalScoreParts(exam);
+  const places = Math.max(rk1Parts.places, rk2Parts.places, examParts.places);
+  const ten = BigInt(10);
+  const unitsPerPoint = ten ** BigInt(places);
+  const weighted = (part: ReturnType<typeof decimalScoreParts>, weight: number) =>
+    part.units * ten ** BigInt(places - part.places) * BigInt(weight);
+  const total = weighted(rk1Parts, assessmentWeights.rk1)
+    + weighted(rk2Parts, assessmentWeights.rk2)
+    + weighted(examParts, assessmentWeights.exam);
+  const score = Number((total + BigInt(50) * unitsPerPoint) / (BigInt(100) * unitsPerPoint));
   const grade = gradeFromScore(score);
   return grade === null ? null : { score, grade };
 }

@@ -65,10 +65,14 @@ test("итоговая оценка учитывает оба РК и экзам
   const { calculateAssessmentResult } = browser().loadProject(studentPath + "integration-adapter.ts");
   const cases = [
     [{ rk1: 0, rk2: 0, exam: 0 }, { score: 0, grade: "F" }],
+    [{ rk1: 0, rk2: 0, exam: 1e-7 }, { score: 0, grade: "F" }],
     [{ rk1: 100, rk2: 0, exam: 0 }, { score: 30, grade: "FX" }],
     [{ rk1: 0, rk2: 100, exam: 0 }, { score: 30, grade: "FX" }],
     [{ rk1: 0, rk2: 0, exam: 100 }, { score: 40, grade: "FX" }],
     [{ rk1: 0, rk2: 0, exam: 30 }, { score: 12, grade: "F" }],
+    [{ rk1: 4.1, rk2: 66.1, exam: 8.59 }, { score: 24, grade: "F" }],
+    [{ rk1: 4.1, rk2: 66.1, exam: 8.6 }, { score: 25, grade: "FX" }],
+    [{ rk1: 4.1, rk2: 66.1, exam: 8.61 }, { score: 25, grade: "FX" }],
     [{ rk1: 80, rk2: 90, exam: 100 }, { score: 91, grade: "A−" }],
     [{ rk1: 88.5, rk2: 88.5, exam: 91 }, { score: 90, grade: "A−" }],
     [{ rk1: 100, rk2: 100, exam: 100 }, { score: 100, grade: "A" }],
@@ -120,7 +124,7 @@ test("GPA пересчитывается после сохранения, пов
     assessment: { ...emptyScores, finalScore: 96 },
     additionalSubjects: [secondSubject],
   });
-  const complete = { rk1: 80, rk2: 90, exam: 100 };
+  const complete = { rk1: 4.1, rk2: 66.1, exam: 8.6 };
   const partial = { ...complete, exam: null };
   const checkAfterReload = (grade, gpa) => {
     const { subjects } = reloadPlan();
@@ -130,7 +134,7 @@ test("GPA пересчитывается после сохранения, пов
 
   readPlan().setAssessment(subject.id, complete);
   assert.deepEqual(savedScores(), complete);
-  checkAfterReload("A−", (3 * 3.67 + 2 * 3) / 5);
+  checkAfterReload("FX", 1.5);
 
   readPlan().setAssessment(subject.id, partial);
   assert.deepEqual(savedScores(), partial);
