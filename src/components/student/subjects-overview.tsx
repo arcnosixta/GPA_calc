@@ -8,6 +8,7 @@ import { gradePoints } from "./integration-adapter";
 import { usePersonalPlan } from "./personal-plan";
 import { SessionState } from "./session-state";
 import { StudentSummary } from "./student-summary";
+import { SubjectListFilters } from "./subject-list-filters";
 
 export function SubjectsOverview() {
   const { session, catalog, subjects } = usePersonalPlan();
@@ -27,10 +28,10 @@ export function SubjectsOverview() {
       </Select>
     </Field>
     <StudentSummary subjects={subjects} semester={semester} />
-    {visible.length ? <Card>
+    {visible.length ? <Card className="space-y-4">
       <h2 className="text-lg font-semibold">Предметы и оценки</h2>
-      <ul className="mt-6 divide-y divide-border">
-        {visible.map((subject) => <li key={subject.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+      <SubjectListFilters key={semester} subjects={visible}>{(filtered) => <ul className="divide-y divide-border">
+        {filtered.map((subject) => <li key={subject.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
           <div className="min-w-0">
             <p className="text-xs text-muted">{subject.code} · {subject.semester} семестр</p>
             <h3 className="mt-1 break-words font-semibold">
@@ -40,7 +41,7 @@ export function SubjectsOverview() {
           </div>
           <Badge variant={subject.grade === null ? "outline" : "strong"}>{subject.grade ?? "Без оценки"}</Badge>
         </li>)}
-      </ul>
+      </ul>}</SubjectListFilters>
     </Card> : <EmptyState title="В плане пока нет предметов" description="Выберите предметы из каталога на странице настройки." />}
   </div>;
 }

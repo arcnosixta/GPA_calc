@@ -8,13 +8,14 @@ import { WorkspaceShell } from "@/components/layout/app-shell";
 import { SupabaseProfileForm } from "@/components/auth/supabase-profile-form";
 import { dataErrorMessage } from "@/lib/data/errors";
 import { readAccount, readProfileCatalog, type Account, type ProfileCatalog } from "@/lib/data/profile";
-import { readStudyData, validateYear, type StudyData } from "@/lib/data/student";
+import { readStudyData, validateYear, type StudyData, type StudentResult } from "@/lib/data/student";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { resolveWorkspaceView, siteRoutes } from "@/lib/site-routes";
 import { calculateGpa, earnsCredits } from "./integration-adapter";
 import { SupabaseAssessment } from "./supabase-assessment";
 import { SupabasePlanSetup } from "./supabase-plan-setup";
 import { SupabaseCalendar } from "./supabase-calendar";
+import { SubjectListFilters } from "./subject-list-filters";
 
 type Loaded = { account: Account; catalog: ProfileCatalog; study: StudyData };
 
@@ -125,7 +126,25 @@ function WorkspaceContent({ pathname, year, state, onSaved, onProfile }: { pathn
     <div className="grid gap-4 sm:grid-cols-3">{[["GPA за год", calculateGpa(subjects)?.toFixed(2) ?? "—"], ["Общий GPA", cumulative?.toFixed(2) ?? "—"], ["Освоено кредитов за год", String(subjects.filter((item) => earnsCredits(item.grade)).reduce((sum, item) => sum + item.credits, 0))]].map(([title, value]) => <Card key={title}><h2 className="text-sm text-muted">{title}</h2><p className="mt-2 text-3xl font-semibold">{value}</p></Card>)}</div>
     <Card className="space-y-3"><h2 className="text-lg font-semibold">Прогноз GPA за год: {projected?.toFixed(2) ?? "—"}</h2><p className="text-sm text-muted">Используются сохранённые предположения, а для остальных предметов — фактические оценки. Прогноз не изменяет результаты. FX и F участвуют в GPA, но не дают освоенных кредитов.</p></Card>
     {pathname.startsWith("/progress") && <Card className="space-y-3"><h2 className="text-lg font-semibold">Прогресс по семестрам</h2>{[...new Set(rows.map((item) => item.semester))].map((semester) => <p key={semester}>Семестр {semester}: GPA {calculateGpa(rows.filter((item) => item.semester === semester).map((item) => ({ credits: item.credits ?? 0, grade: item.grade })))?.toFixed(2) ?? "—"}</p>)}</Card>}
-    <Card className="space-y-4"><h2 className="text-lg font-semibold">Предметы · {year}</h2>{!rows.length ? <p>План пока пуст. Добавьте первый предмет из каталога.</p> : <ul className="divide-y divide-border">{rows.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div className="min-w-0"><Link className="break-words font-semibold underline underline-offset-4" href={`/subjects/${item.id}?year=${year}`}>{item.title}</Link><p className="mt-1 text-sm text-muted">Семестр {item.semester} · {item.credits} кр.</p></div><span>{item.grade ?? "Нет оценки"} · {item.final_score ?? "—"}</span></li>)}</ul>}<Link className="inline-block underline" href={`/setup?year=${year}`}>Добавить предмет</Link></Card>
+    <Card className="space-y-4">
+      <h2 className="text-lg font-semibold">Предметы · {year}</h2>
+      {!rows.length ? <p>План пока пуст. Добавьте первый предмет из каталога.</p> : pathname === "/subjects" ? (
+        <SubjectListFilters subjects={rows}>{(filtered) => <StudyResultsList rows={filtered} year={year} />}</SubjectListFilters>
+      ) : <StudyResultsList rows={rows} year={year} />}
+      <Link className="inline-block underline" href={`/setup?year=${year}`}>Добавить предмет</Link>
+    </Card>
     {pathname === "/dashboard" && universityId && <SupabaseCalendar key={`${universityId}:${year}`} universityId={universityId} year={year} />}
   </>;
+}
+
+function StudyResultsList({ rows, year }: { rows: StudentResult[]; year: string }) {
+  return <ul className="divide-y divide-border">{rows.map((item) => (
+    <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+      <div className="min-w-0">
+        <Link className="break-words font-semibold underline underline-offset-4" href={`/subjects/${item.id}?year=${year}`}>{item.title}</Link>
+        <p className="mt-1 text-sm text-muted">{item.code ? `${item.code} · ` : ""}Семестр {item.semester} · {item.credits} кр.</p>
+      </div>
+      <span>{item.grade ?? "Нет оценки"} · {item.final_score ?? "—"}</span>
+    </li>
+  ))}</ul>;
 }
